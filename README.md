@@ -18,7 +18,7 @@
 
 1. 克隆此仓库:
    ```bash
-   git clone https://github.com/your-username/stock-analysis-website.git
+   git clone https://github.com/reven-tang/gtap.git
    ```
 
 2. 进入项目目录:
