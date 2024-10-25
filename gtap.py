@@ -250,7 +250,7 @@ def grid_trading(data, grid_upper, grid_lower, grid_number, grid_center, shares_
     avg_price = current_holding_price  # 平均持仓价格
     total_fees = 0  # 总费用
     cash -= total_fee  # 更新现金余额
-    trades = [('初次买入', data.index[0], current_holding_price, initial_shares, current_holding_price, commission, transfer_fee, stamp_duty, total_fee, shares)]  # 交易记录，添加初始持仓价格和费用
+    trades = [('初次买入', data.index[0], current_holding_price, initial_shares, shares, commission, transfer_fee, stamp_duty, total_fee, current_holding_price)]  # 交易记录，添加初始持仓价格和费用
 
     # 执行网格交易回测
     for i, row in data.iterrows():
@@ -283,7 +283,7 @@ def grid_trading(data, grid_upper, grid_lower, grid_number, grid_center, shares_
                 avg_price = total_buy_volume / shares if shares != 0 else 0  # 更新平均持仓价格，避免除以零错误
                 current_grid_center = min([gp for gp in grid_prices if gp > price], default=grid_upper)  # 更新当前网格中心价格
                 total_fees += total_fee
-                trades.append(('买入', i, price, buy_shares, avg_price, commission, transfer_fee, stamp_duty, total_fee, shares))  # 记录交易，包括交易前的平均持仓价格和费用
+                trades.append(('买入', i, price, buy_shares, shares, commission, transfer_fee, stamp_duty, total_fee, avg_price))  # 记录交易，包括交易前的平均持仓价格和费用
         
         # 检查是否需要卖出
         elif price > current_grid_upper and price > current_grid_upper:
@@ -306,7 +306,7 @@ def grid_trading(data, grid_upper, grid_lower, grid_number, grid_center, shares_
                 avg_price = (total_buy_volume - sell_amount) / shares if shares > 0 else 0  # 更新平均持仓价格，避免除以零错误
                 current_grid_center = max([gp for gp in grid_prices if gp < price], default=grid_lower)  # 更新当前网格中心价格
                 total_fees += total_fee
-                trades.append(('卖出', i, price, sell_shares, avg_price, commission, transfer_fee, stamp_duty, total_fee, shares))  # 记录交易，包括交易前的平均持仓价格和费用
+                trades.append(('卖出', i, price, sell_shares, shares, commission, transfer_fee, stamp_duty, total_fee, avg_price))  # 记录交易，包括交易前的平均持仓价格和费用
 
         # 计算当前资产价值
         asset_value = cash + shares * price
@@ -565,7 +565,7 @@ def main():
 
                 # 显示交易记录
                 st.subheader('网格交易记录')
-                trades_df = pd.DataFrame(trades, columns=['操作', '时间', '价格', '数量', '当前持仓价格', '佣金', '过户费', '印花税', '总费用', '持股总数'])
+                trades_df = pd.DataFrame(trades, columns=['操作', '时间', '价格', '数量', '持股总数', '佣金', '过户费', '印花税', '总费用', '当前持仓价格'])
                 st.dataframe(trades_df, use_container_width=True)
 
                 # 绘制资产价值变化图
