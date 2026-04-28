@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gtap"
+version = "0.2.0"
+description = "Grid Trading Analysis Platform - 股票网格交易回测平台"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "reven-tang", email = "reven.tang@example.com"}
+]
+keywords = ["grid-trading", "stock-analysis", "backtesting", "streamlit"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "streamlit>=1.39.0",
+    "baostock>=0.8.9",
+    "pandas>=2.2.3",
+    "numpy>=1.26.4",
+    "plotly>=5.24.1",
+    "matplotlib>=3.8.2",
+    "mplfinance>=0.12.10b0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/reven-tang/gtap"
+Repository = "https://github.com/reven-tang/gtap.git"
+
+[tool.setuptools]
+packages = ["gtap"]
+package-dir = {"" = "src"}
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
