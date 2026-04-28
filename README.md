@@ -6,7 +6,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0--dev-blue)](CHANGELOG.md)
 
 </div>
 
@@ -21,6 +21,7 @@
 - 📋 **财务数据**: 可选显示季频财务数据（盈利能力、营运能力、成长能力等）
 - 🔁 **网格回测**: 执行网格交易回测，计算收益率、波动率等绩效指标
 - 💰 **费用模拟**: 精确计算佣金、过户费、印花税
+- 🛡️ **ATR 动态止损止盈**: 基于平均真实波幅（ATR）的智能止损止盈，适配市场波动率
 
 ## 🖼️ 效果展示
 
@@ -74,7 +75,7 @@ streamlit run app.py
 
 然后在浏览器打开 `http://localhost:8501`
 
-## 📁 项目结构 (v0.2.0+)
+## 📁 项目结构 (v0.3.0-dev)
 
 ```
 gtap/
@@ -101,7 +102,7 @@ gtap/
 └── README.md              # 本文件
 ```
 
-> **注**: v0.2.0 起项目采用模块化架构，`app.py` 为新入口，旧 `gtap.py` 保留用于参考。
+> **注**: v0.3.0-dev 起项目支持 ATR 动态止损止盈（可选），向后兼容 v0.2.0 所有配置。
 
 ## 🛠️ 技术栈
 

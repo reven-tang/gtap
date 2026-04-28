@@ -15,13 +15,20 @@ if TYPE_CHECKING:
     from .grid import GridTradingResult, Trade
 
 
-def plot_kline(data: pd.DataFrame, stock_code: str) -> go.Figure:
+def plot_kline(
+    data: pd.DataFrame,
+    stock_code: str,
+    atr_series: Optional[pd.Series] = None,
+    trades: Optional[list] = None,
+) -> go.Figure:
     """
-    绘制交互式 K 线图（含均线）。
+    绘制交互式 K 线图（含均线 + 可选 ATR 止损/止盈参考线）。
 
     Args:
         data: 价格数据（索引为 datetime，包含 open/high/low/close/volume）
         stock_code: 股票代码（用于标题）
+        atr_series: ATR 值序列（与 data 索引对齐），可选
+        trades: 交易记录列表（Trade NamedTuple），可选，用于标注止损/止盈触发点
 
     Returns:
         Plotly Figure 对象
@@ -54,6 +61,58 @@ def plot_kline(data: pd.DataFrame, stock_code: str) -> go.Figure:
     fig.add_trace(go.Scatter(x=data.index, y=data["MA10"], name="MA10", line=dict(color="orange", width=1)))
     fig.add_trace(go.Scatter(x=data.index, y=data["MA20"], name="MA20", line=dict(color="green", width=1)))
 
+    # ATR 曲线（次坐标轴，可选）
+    if atr_series is not None and len(atr_series) > 0:
+        # 对齐数据索引
+        atr_aligned = atr_series.reindex(data.index)
+        fig.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=atr_aligned,
+                name="ATR",
+                line=dict(color="purple", width=1, dash="dash"),
+                yaxis="y3",
+                opacity=0.7,
+            )
+        )
+
+    # 止损/止盈触发点标注（可选）
+    if trades is not None:
+        stop_loss_times = []
+        stop_loss_prices = []
+        take_profit_times = []
+        take_profit_prices = []
+        for t in trades:
+            reason = getattr(t, "exit_reason", "grid")
+            if reason == "stop_loss":
+                stop_loss_times.append(t.timestamp)
+                stop_loss_prices.append(t.price)
+            elif reason == "take_profit":
+                take_profit_times.append(t.timestamp)
+                take_profit_prices.append(t.price)
+        if stop_loss_times:
+            fig.add_trace(
+                go.Scatter(
+                    x=stop_loss_times,
+                    y=stop_loss_prices,
+                    mode="markers",
+                    name="止损触发",
+                    marker=dict(symbol="triangle-down", size=12, color="red", line=dict(width=1, color="darkred")),
+                    yaxis="y",
+                )
+            )
+        if take_profit_times:
+            fig.add_trace(
+                go.Scatter(
+                    x=take_profit_times,
+                    y=take_profit_prices,
+                    mode="markers",
+                    name="止盈触发",
+                    marker=dict(symbol="triangle-up", size=12, color="green", line=dict(width=1, color="darkgreen")),
+                    yaxis="y",
+                )
+            )
+
     # 成交量（次坐标轴）
     fig.add_trace(
         go.Bar(x=data.index, y=data["volume"], name="成交量", yaxis="y2", visible="legendonly")
@@ -65,13 +124,18 @@ def plot_kline(data: pd.DataFrame, stock_code: str) -> go.Figure:
         xaxis_rangeslider_visible=True,
         height=800,
         dragmode="zoom",
-        yaxis2=dict(title="成交量", overlaying="y", side="right", showgrid=False),
+        # yaxis: 左侧主坐标轴（价格）
+        yaxis=dict(title="价格", domain=[0.3, 1]),
+        # yaxis2: 右侧坐标轴（ATR 曲线）
+        yaxis2=dict(title="ATR", overlaying="y", side="right", showgrid=False, domain=[0.3, 1]),
+        # yaxis3: 底部坐标轴（成交量）
+        yaxis3=dict(title="成交量", overlaying="x", side="bottom", showgrid=False, domain=[0, 0.2]),
         xaxis_rangeslider=dict(visible=True, yaxis=dict(rangemode="auto")),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
-    # 主图占 70%，成交量占 20%
-    fig.update_layout(yaxis=dict(domain=[0.3, 1]), yaxis2=dict(domain=[0, 0.2]))
+    # 成交量使用 yaxis3（底部坐标轴）
+    # 已在 add_trace 中指定 yaxis="y3"
 
     return fig
 

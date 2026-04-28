@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-04-28 (开发中)
+
+### Added 新增
+- ✅ ATR 动态止损止盈模块 `src/gtap/atr.py`
+  - `calculate_atr()`: SMA 风格 ATR 计算（前 period-1 个值为 NaN）
+  - `get_atr_stop_levels()`: 止损止盈价位计算
+  - `is_atr_stop_triggered()`: 持仓方向感知的触发判断（多头/空头）
+- ✅ `GridTradingConfig` 新增 4 个 ATR 参数
+  - `use_atr_stop` (默认 False，向后兼容)
+  - `atr_period` (默认 14)
+  - `atr_stop_multiplier` (默认 1.5)
+  - `atr_tp_multiplier` (默认 0.5)
+- ✅ `Trade` NamedTuple 扩展 4 个 ATR 字段
+  - `atr_value`, `stop_loss_price`, `take_profit_price`, `exit_reason`
+- ✅ `GridTradingResult` 扩展 3 个统计字段
+  - `stop_loss_count`, `take_profit_count`, `grid_trade_count`
+- ✅ ATR 单元测试 `tests/test_atr.py`（15 测试，100% 通过）
+- ✅ `grid.py` 主循环集成 ATR 检查（优先于网格交易）
+- ✅ 清仓后资产序列继续记录现金价值（不提前终止）
+
+### Changed 变更
+- 🔄 `grid_trading()` 签名：新增可选参数 `atr_series: Optional[pd.Series]`
+- 🔄 普通网格卖出 `Trade` 记录补充 ATR 字段（向后兼容填充默认值）
+- 🔄 返回 `GridTradingResult` 时包含 ATR 统计字段
+
+### Fixed 修复
+- 🔧 ATR 测试匹配错误（错误消息正则修正）
+- 🔧 `is_atr_stop_triggered` 止盈判断缺失（新增 `tp_multiplier` 参数）
+- 🔧 `is_atr_stop_triggered` 空头止盈/止损价位反转逻辑
+
+### Known Issues 已知问题
+- ⚠️ `@st.cache_data` 缓存尚未启用
+- ⚠️ `app.py` 侧边栏 ATR 控件尚未添加
+- ⚠️ `plot.py` ATR 止损/止盈线绘制未实现
+- ⚠️ 测试覆盖率未统计（计划 pytest-cov）
+
+---
+
 ## [0.2.0] — 2026-04-28
 
 ### Added 新增

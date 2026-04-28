@@ -29,6 +29,7 @@ from .exceptions import (
     MetricsError,
     PlotError,
 )
+from .atr import calculate_atr, get_atr_stop_levels
 
 __all__ = [
     # config
@@ -52,6 +53,9 @@ __all__ = [
     "plot_asset_curve",
     "plot_grid_lines",
     "plot_mplfinance",
+    # atr
+    "calculate_atr",
+    "get_atr_stop_levels",
     # exceptions
     "DataFetchError",
     "GridTradingError",

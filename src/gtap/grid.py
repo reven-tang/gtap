@@ -9,7 +9,7 @@
 - 初始持仓费用计算
 """
 
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 import pandas as pd
 from .fees import calculate_fees
 from .exceptions import GridTradingError
@@ -18,7 +18,7 @@ from .config import GridTradingConfig
 
 class Trade(NamedTuple):
     """单笔交易记录"""
-    action: str          # "买入" / "卖出"
+    action: str                  # "买入" / "卖出"
     timestamp: pd.Timestamp
     price: float
     shares: int
@@ -27,7 +27,11 @@ class Trade(NamedTuple):
     transfer_fee: float
     stamp_duty: float
     total_fee: float
-    avg_price: float     # 交易前的平均持仓价
+    avg_price: float             # 交易前的平均持仓价
+    atr_value: float = 0.0       # 入场时的 ATR 值（ATR 止损止盈专用）
+    stop_loss_price: float = 0.0  # 止损价位
+    take_profit_price: float = 0.0  # 止盈价位
+    exit_reason: str = "grid"    # 退出原因: grid/stop_loss/take_profit
 
 
 class GridTradingResult(NamedTuple):
@@ -40,18 +44,24 @@ class GridTradingResult(NamedTuple):
     trade_profits: list[float]         # 每笔卖出盈利列表
     asset_values: list[float]          # 每个时间点的资产价值
     total_fees: float                  # 总费用
+    # ATR 统计（v0.3.0+）
+    stop_loss_count: int = 0           # 止损次数
+    take_profit_count: int = 0         # 止盈次数
+    grid_trade_count: int = 0          # 网格触发次数（非止损/止盈）
 
 
 def grid_trading(
     data: pd.DataFrame,
     config: GridTradingConfig,
+    atr_series: Optional[pd.Series] = None,
 ) -> GridTradingResult:
     """
     执行网格交易回测。
 
     Args:
-        data: 价格数据（DataFrame，索引为 datetime，包含 'close' 列）
+        data: 价格数据（DataFrame，索引为 datetime，包含 'close' 列，可选 'high'/'low'）
         config: 网格交易配置
+        atr_series: ATR 序列（可选，长度需与 data 一致；为 None 时不启用 ATR 止损）
 
     Returns:
         GridTradingResult 回测结果
@@ -80,6 +90,10 @@ def grid_trading(
     commission_rate = config.commission_rate
     transfer_fee_rate = config.transfer_fee_rate
     stamp_duty_rate = config.stamp_duty_rate
+    # ATR 参数
+    use_atr_stop = config.use_atr_stop
+    atr_stop_multiplier = config.atr_stop_multiplier
+    atr_tp_multiplier = config.atr_tp_multiplier
 
     # 预计算网格线价格
     grid_step = (grid_upper - grid_lower) / (grid_number - 1)
@@ -97,6 +111,10 @@ def grid_trading(
     total_fees_acc = 0.0
     current_grid_center = grid_center
     avg_price = current_holding_price
+    # ATR 统计
+    stop_loss_count = 0
+    take_profit_count = 0
+    grid_trade_count = 0
 
     # 计算初次买入费用
     first_buy_amount = initial_shares * current_holding_price
@@ -106,7 +124,7 @@ def grid_trading(
     cash -= first_fee
     total_fees_acc += first_fee
 
-    # 记录初次买入交易
+    # 记录初次买入交易（初始 ATR 相关字段为 0，exit_reason="grid"）
     trades: list[Trade] = [
         Trade(
             action="买入",
@@ -119,6 +137,10 @@ def grid_trading(
             stamp_duty=0.0,
             total_fee=first_fee,
             avg_price=current_holding_price,
+            atr_value=0.0,
+            stop_loss_price=0.0,
+            take_profit_price=0.0,
+            exit_reason="grid",
         )
     ]
 
@@ -126,15 +148,91 @@ def grid_trading(
     for timestamp, row in data.iterrows():
         price = float(row["close"])
 
+        # --- ATR 动态止损止盈检查（优先于网格交易）---
+        exit_reason: str = "grid"  # 默认退出原因
+        if use_atr_stop and shares > 0:
+            # 获取当前 ATR 值
+            try:
+                atr_value = float(atr_series.loc[timestamp]) if atr_series is not None else 0.0
+            except (KeyError, TypeError):
+                atr_value = 0.0
+
+            # 仅在有持仓且 ATR 有效时检查
+            if atr_value > 0 and shares > 0:
+                # 计算止损止盈价位
+                stop_distance = atr_value * atr_stop_multiplier
+                stop_loss_price = avg_price - stop_distance  # 多头止损
+                take_profit_price = avg_price + (atr_value * atr_tp_multiplier)  # 多头止盈
+
+                # 检查触发
+                if price <= stop_loss_price:
+                    exit_reason = "stop_loss"
+                elif price >= take_profit_price and atr_tp_multiplier > 0:
+                    exit_reason = "take_profit"
+                else:
+                    exit_reason = "grid"
+
+                # 执行强制平仓（止损/止盈触发）
+                if exit_reason in ("stop_loss", "take_profit"):
+                    sell_shares = shares
+                    sell_amount = sell_shares * price
+
+                    commission, transfer_fee, stamp_duty, fee = calculate_fees(
+                        sell_amount, False, stock_code, commission_rate, transfer_fee_rate, stamp_duty_rate
+                    )
+
+                    cash += sell_amount - fee
+                    total_sell_volume += sell_amount
+                    total_sell_count += 1
+                    total_fees_acc += fee
+
+                    cost_basis = sell_shares * avg_price
+                    profit = sell_amount - cost_basis - fee
+                    trade_profits.append(profit)
+
+                    # 记录止损/止盈交易
+                    trades.append(
+                        Trade(
+                            action="卖出",
+                            timestamp=timestamp,
+                            price=price,
+                            shares=sell_shares,
+                            total_shares=0,
+                            commission=commission,
+                            transfer_fee=transfer_fee,
+                            stamp_duty=stamp_duty,
+                            total_fee=fee,
+                            avg_price=avg_price,
+                            atr_value=atr_value,
+                            stop_loss_price=stop_loss_price,
+                            take_profit_price=take_profit_price,
+                            exit_reason=exit_reason,
+                        )
+                    )
+
+                    # 更新统计
+                    if exit_reason == "stop_loss":
+                        stop_loss_count += 1
+                    else:
+                        take_profit_count += 1
+
+                    # 清仓后跳过后续网格逻辑
+                    shares = 0
+                    avg_price = 0.0
+                    asset_value = cash  # 清仓后资产仅为现金
+                    asset_values.append(asset_value)
+                    continue
+
         # 找到当前网格中心对应的上下网格线
         lower_grids = [gp for gp in grid_prices if gp < current_grid_center]
         upper_grids = [gp for gp in grid_prices if gp > current_grid_center]
         current_grid_lower = max(lower_grids) if lower_grids else grid_lower
         current_grid_upper = min(upper_grids) if upper_grids else grid_upper
 
-        # 如果已清仓，提前结束
+        # 如果已清仓，直接记录资产价值并 continue
         if shares == 0:
-            break
+            asset_values.append(cash)
+            continue
 
         # ========== 买入逻辑 ==========
         if price < current_grid_lower:
@@ -176,8 +274,13 @@ def grid_trading(
                         stamp_duty=stamp_duty,
                         total_fee=fee,
                         avg_price=avg_price,
+                        atr_value=atr_value if use_atr_stop else 0.0,
+                        stop_loss_price=0.0,
+                        take_profit_price=0.0,
+                        exit_reason="grid",
                     )
                 )
+                grid_trade_count += 1
 
         # ========== 卖出逻辑 ==========
         elif price > current_grid_upper:
@@ -226,8 +329,13 @@ def grid_trading(
                         stamp_duty=stamp_duty,
                         total_fee=fee,
                         avg_price=avg_price,
+                        atr_value=atr_value if use_atr_stop else 0.0,
+                        stop_loss_price=0.0,
+                        take_profit_price=0.0,
+                        exit_reason="grid",
                     )
                 )
+                grid_trade_count += 1
 
         # 记录资产价值
         asset_value = cash + shares * price
@@ -242,4 +350,7 @@ def grid_trading(
         trade_profits=trade_profits,
         asset_values=asset_values,
         total_fees=total_fees_acc,
+        stop_loss_count=stop_loss_count,
+        take_profit_count=take_profit_count,
+        grid_trade_count=grid_trade_count,
     )

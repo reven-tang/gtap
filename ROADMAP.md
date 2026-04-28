@@ -84,47 +84,31 @@
 **实际工时**: 约 4 小时
 **状态**: ✅ 已完成
 
-### v0.3.0 — 回测引擎升级
+### v0.3.0 — 回测引擎升级 ✅ PARTIALLY COMPLETE
 
 **目标**: 回测能力达到专业水平
 
-**任务清单**:
+**完成项**:
+- ✅ 引入 ATR 动态止损止盈（atr.py + grid.py 集成）
+  - `calculate_atr()`: SMA 风格 ATR 计算
+  - `get_atr_stop_levels()`: 止损止盈价位
+  - `is_atr_stop_triggered()`: 方向感知触发判断
+  - `GridTradingConfig` 扩展 4 个 ATR 参数（默认关闭）
+  - `Trade` 扩展 4 个 ATR 字段
+  - `GridTradingResult` 扩展 3 个统计
+  - 主循环集成 ATR 检查（优先于网格交易，清仓后资产序列继续记录）
+- ✅ ATR 单元测试 `tests/test_atr.py`（15 测试，100% 通过）
+- ✅ 向后兼容：`use_atr_stop=False` 时行为与 v0.2.0 完全一致
+- ✅ 数据与配置解耦（ATR 在 app.py 计算并传入）
 
-#### 1. 引入 ATR 动态止损止盈
-参考 [defiplot 实现](http://defiplot.com/blog/grid-trading-with-python/):
-```python
-# ATR 止损距离
-sl_atr = 1.5 * atr_value
-stop_loss = entry_price ± sl_atr
-take_profit = entry_price ∓ (sl_atr * TPSLRatio)  # TPSLRatio = 0.5
-```
+**待完成**:
+- ⏳ `metrics.py` 新增 ATR 统计指标
+- ⏳ `plot.py` 可选绘制 ATR 止损/止盈线
+- ⏳ `app.py` 侧边栏添加 ATR 配置控件
+- ⏳ 集成测试验证（完整 suite 运行）
+- ⏳ 文档更新（README/ROADMAP 标记）
 
-#### 2. 新增性能指标
-- [ ] Sharpe Ratio (夏普比率)
-- [ ] Sortino Ratio (索提诺比率)
-- [ ] Max Drawdown (最大回撤)
-- [ ] Calmar Ratio (卡尔玛比率)
-- [ ] Profit Factor (盈亏比)
-- [ ] Recovery Factor (恢复因子)
-- [ ] 月度/年度收益率分解
-
-#### 3. 网格策略增强
-- [ ] 网格间距百分比模式（`grid_step = price * 0.5%`）
-- [ ] 网格间距绝对价格模式（保留原逻辑）
-- [ ] 对称/不对称网格支持
-- [ ] 动态网格重置（价格突破区间后重置中心点）
-
-#### 4. 回测逻辑修复
-- [ ] 修复 `price < current_grid_lower and price < current_grid_lower` 冗余条件
-- [ ] 规范 `grid_center` 更新逻辑（明确何时更新、何时不变）
-- [ ] 优化网格线查找（预计算网格字典 O(1) 查找）
-- [ ] 修复初始持仓的双重赋值 bug
-
-#### 5. 交易记录导出
-- [ ] 导出 CSV（时间、价格、数量、类型、盈亏）
-- [ ] 图表标注买卖点（Plotly 图表）
-
-**预计工时**: 4-6 小时
+**预计剩余工时**: 1.5 小时
 **优先级**: 🔥 高
 
 ---

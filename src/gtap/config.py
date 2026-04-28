@@ -41,6 +41,12 @@ class GridTradingConfig:
     adjustflag: Literal["1", "2", "3"] = "3"  # 复权类型 1:前复权 2:后复权 3:不复权
     show_quarterly_data: bool = False  # 是否显示季频财务数据
 
+    # ATR 动态止损止盈
+    use_atr_stop: bool = False             # 是否启用 ATR 止损止盈
+    atr_period: int = 14                   # ATR 计算周期
+    atr_stop_multiplier: float = 1.5       # 止损乘数 (sl_atr = atr * multiplier)
+    atr_tp_multiplier: float = 0.5         # 止盈乘数 (tp_atr = atr * multiplier)
+
     def __post_init__(self):
         """参数验证"""
         self._validate()
@@ -68,6 +74,14 @@ class GridTradingConfig:
         if self.stamp_duty_rate < 0:
             raise ConfigError("印花税费率不能为负")
 
+        # ATR 参数验证
+        if self.atr_period < 2:
+            raise ConfigError("ATR 周期必须 ≥ 2")
+        if self.atr_stop_multiplier <= 0:
+            raise ConfigError("ATR 止损乘数必须 > 0")
+        if self.atr_tp_multiplier < 0:
+            raise ConfigError("ATR 止盈乘数必须 ≥ 0")
+
     @property
     def grid_step(self) -> float:
         """计算网格间距"""
@@ -93,6 +107,10 @@ class GridTradingConfig:
             "frequency": self.frequency,
             "adjustflag": self.adjustflag,
             "show_quarterly_data": self.show_quarterly_data,
+            "use_atr_stop": self.use_atr_stop,
+            "atr_period": self.atr_period,
+            "atr_stop_multiplier": self.atr_stop_multiplier,
+            "atr_tp_multiplier": self.atr_tp_multiplier,
         }
 
 

@@ -119,6 +119,20 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         index=2,
         format_func=lambda x: {"1": "前复权", "2": "后复权", "3": "不复权"}.get(x, x),
     )
+
+    # ---- ATR 动态止损止盈（v0.3.0）----
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("ATR 动态止损止盈")
+    use_atr_stop = st.sidebar.checkbox("启用 ATR 止损止盈", value=False, help="使用 ATR 动态止损止盈，默认关闭")
+    if use_atr_stop:
+        atr_period = st.sidebar.slider("ATR 计算周期", min_value=5, max_value=30, value=14, step=1)
+        atr_stop_mult = st.sidebar.slider("止损乘数", min_value=0.5, max_value=5.0, value=1.5, step=0.1, format="%.1f")
+        atr_tp_mult = st.sidebar.slider("止盈乘数", min_value=0.0, max_value=2.0, value=0.5, step=0.1, format="%.1f")
+    else:
+        atr_period = 14
+        atr_stop_mult = 1.5
+        atr_tp_mult = 0.5
+
     show_quarterly = st.sidebar.checkbox("显示季频财务数据", value=False)
 
     st.sidebar.write("")
@@ -143,6 +157,11 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         frequency=frequency,
         adjustflag=adjustflag,
         show_quarterly_data=show_quarterly,
+        # ATR 参数（v0.3.0）
+        use_atr_stop=use_atr_stop,
+        atr_period=atr_period,
+        atr_stop_multiplier=atr_stop_mult,
+        atr_tp_multiplier=atr_tp_mult,
     )
 
     return config, run_button
@@ -187,6 +206,24 @@ def main() -> None:
 
     st.success(f"✅ 数据获取成功：共 {len(data)} 条 K 线记录")
 
+    # 计算 ATR（如果启用）
+    atr_series = None
+    if config.use_atr_stop:
+        from src.gtap.atr import calculate_atr
+        with st.spinner("正在计算 ATR 动态止损止盈指标..."):
+            try:
+                atr_series = calculate_atr(data, period=config.atr_period)
+                # 显示 ATR 统计
+                valid_atr = atr_series.dropna()
+                if len(valid_atr) > 0:
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("当前 ATR", f"{valid_atr.iloc[-1]:.4f}")
+                    col2.metric("ATR 均值", f"{valid_atr.mean():.4f}")
+                    col3.metric("ATR 最大值", f"{valid_atr.max():.4f}")
+            except Exception as e:
+                st.warning(f"ATR 计算失败: {e}，将使用固定百分比止损")
+                atr_series = None
+
     # ========== K 线图 ==========
     st.header("📊 股票历史 K 线数据")
     latest = data.iloc[-1]
@@ -202,7 +239,7 @@ def main() -> None:
         pct_change = (latest["close"] / data.iloc[-2]["close"] - 1) * 100
         col6.metric("涨跌幅", f"{pct_change:.2f}%")
 
-    fig_kline = plot_kline(data, config.stock_code)
+    fig_kline = plot_kline(data, config.stock_code, atr_series=atr_series, trades=result.trades)
     st.plotly_chart(fig_kline, use_container_width=True)
 
     # ========== 网格交易回测 ==========
@@ -211,7 +248,7 @@ def main() -> None:
 
     with st.spinner("正在执行回测..."):
         try:
-            result = grid_trading(data, config)
+            result = grid_trading(data, config, atr_series=atr_series)
         except GridTradingError as e:
             st.error(f"回测失败: {e}")
             return
@@ -245,39 +282,36 @@ def main() -> None:
     # ---------- 绩效指标 ----------
     st.subheader("📊 绩效指标")
 
-    initial_investment = config.initial_shares * config.current_holding_price
-    final_value = result.asset_values[-1] if result.asset_values else initial_investment
-
-    # 计算指标
+    # 计算指标（v0.3.0+: 从 asset_values 自动推导初始投资）
     metrics = calculate_metrics(
         asset_values=result.asset_values,
         trades=result.trades,
-        initial_investment=initial_investment,
-        total_investment=config.total_investment,
         total_fees=result.total_fees,
         start_date=pd.Timestamp(config.start_date),
         end_date=pd.Timestamp(config.end_date),
     )
 
-    # 补充交易指标
-    trade_metrics = calculate_trade_metrics(
-        trade_profits=result.trade_profits,
-        total_buy_count=result.total_buy_count,
-        total_sell_count=result.total_sell_count,
-    )
-    metrics.update(trade_metrics)
-
     # 展示指标卡片
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("初始投资", f"¥{initial_investment:,.2f}")
-    col2.metric("最终资产", f"¥{final_value:,.2f}")
-    col3.metric("总利润（含费）", f"¥{final_value - config.total_investment:,.2f}")
+    col1.metric("初始资产", f"¥{result.asset_values[0]:,.2f}" if result.asset_values else "¥0.00")
+    col2.metric("最终资产", f"¥{result.asset_values[-1]:,.2f}" if result.asset_values else "¥0.00")
+    col3.metric("总利润（含费）", f"¥{result.asset_values[-1] - result.asset_values[0]:,.2f}" if result.asset_values else "¥0.00")
     col4.metric("总费用", f"¥{result.total_fees:,.2f}")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("总收益率", f"{metrics['total_return']:.2f}%")
     col2.metric("年化收益率", f"{metrics['annual_return']:.2f}%")
     col3.metric("年化波动率", f"{metrics['annual_volatility']:.2f}%")
+
+    # ATR 动态止损止盈统计（v0.3.0+）
+    if config.use_atr_stop:
+        st.markdown("**🛡️ ATR 动态止损止盈统计**")
+        col_a, col_b, col_c, col_d, col_e = st.columns(5)
+        col_a.metric("止损次数", str(result.stop_loss_count))
+        col_b.metric("止盈次数", str(result.take_profit_count))
+        col_c.metric("网格交易次数", str(result.grid_trade_count))
+        col_d.metric("止损占比", f"{metrics['stop_loss_rate']:.2%}")
+        col_e.metric("止盈占比", f"{metrics['take_profit_rate']:.2%}")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("夏普比率", f"{metrics['sharpe_ratio']:.2f}")

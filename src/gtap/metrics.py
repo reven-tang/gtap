@@ -30,13 +30,17 @@ class PerformanceMetrics(TypedDict):
     best_trade: float            # 最佳单笔收益
     worst_trade: float           # 最差单笔亏损
     avg_trade: float             # 平均交易收益
+    # ATR 动态止损止盈统计（v0.3.0+）
+    stop_loss_count: int         # 止损触发次数
+    take_profit_count: int       # 止盈触发次数
+    grid_trade_count: int        # 网格触发次数
+    stop_loss_rate: float        # 止损占比（stop_loss_count / total_trades）
+    take_profit_rate: float      # 止盈占比（take_profit_count / total_trades）
 
 
 def calculate_metrics(
     asset_values: list[float],
     trades: list,
-    initial_investment: float,
-    total_investment: float,
     total_fees: float,
     start_date: pd.Timestamp,
     end_date: pd.Timestamp,
@@ -47,9 +51,7 @@ def calculate_metrics(
 
     Args:
         asset_values: 资产价值序列（每个时间点的总资产）
-        trades: 交易记录列表
-        initial_investment: 初始投资金额
-        total_investment: 总投入资金
+        trades: 交易记录列表（Trade NamedTuple）
         total_fees: 总费用
         start_date: 回测开始日期
         end_date: 回测结束日期
@@ -61,11 +63,15 @@ def calculate_metrics(
     Raises:
         MetricsError: 计算失败
     """
-    if not asset_values or initial_investment <= 0:
-        raise MetricsError("无效的输入数据：资产价值为空或初始投资 ≤ 0")
+    if not asset_values or len(asset_values) < 2:
+        raise MetricsError("无效的输入数据：资产价值为空或长度不足")
 
     # 转换为 numpy 数组便于计算
     values = np.array(asset_values, dtype=float)
+
+    # ---------- 基础参数 ----------
+    initial_investment = values[0]  # 资产序列首值为初始投资
+    total_investment = values[0]    # 总投入等于初始投资（无追加）
 
     # ---------- 基础收益指标 ----------
     final_value = values[-1]
@@ -131,16 +137,19 @@ def calculate_metrics(
 
     # ---------- 交易指标 ----------
     total_trades = len(trades)
-    sell_profits = [t for t in trades if t.action == "卖出"]
-    buy_profits = [t for t in trades if t.action == "买入"]
 
-    if sell_profits:
-        profits = [s.avg_price for s in sell_profits]  # 这里需要从 Trade 中提取盈亏
-        # 由于 Trade 中直接存 avg_price，我们从 grid.py 的 trade_profits 列表计算
-        pass
+    # ATR 统计（v0.3.0+）：从 Trade 的 exit_reason 字段统计
+    stop_loss_count = sum(1 for t in trades if getattr(t, "exit_reason", "grid") == "stop_loss")
+    take_profit_count = sum(1 for t in trades if getattr(t, "exit_reason", "grid") == "take_profit")
+    grid_trade_count = total_trades - stop_loss_count - take_profit_count
 
-    # win_rate 和 avg_trade 需要外部传入 trade_profits 列表
-    # 本函数仅从 trades 计算次数，盈亏需另外传递
+    # 计算 ATR 相关比率
+    stop_loss_rate = stop_loss_count / total_trades if total_trades > 0 else 0.0
+    take_profit_rate = take_profit_count / total_trades if total_trades > 0 else 0.0
+
+    # 平均入场 ATR 值（仅统计有 ATR 记录的入场交易）
+    atr_values = [getattr(t, "atr_value", 0.0) for t in trades if getattr(t, "atr_value", 0.0) > 0]
+    avg_atr_at_entry = float(np.mean(atr_values)) if atr_values else 0.0
 
     return PerformanceMetrics(
         total_return=round(profit_pct, 2),
@@ -153,13 +162,19 @@ def calculate_metrics(
         sortino_ratio=round(sortino, 2),
         max_drawdown=round(max_dd, 2),
         calmar_ratio=round(calmar, 2),
-        profit_factor=0.0,      # 待补充
-        recovery_factor=0.0,    # 待补充
-        win_rate=0.0,           # 待补充
+        profit_factor=0.0,      # TODO: 需 trade_profits 列表
+        recovery_factor=0.0,    # TODO: 需 drawdown 恢复期计算
+        win_rate=0.0,           # TODO: 需 trade_profits 列表
         total_trades=total_trades,
-        best_trade=0.0,         # 待补充
-        worst_trade=0.0,        # 待补充
-        avg_trade=0.0,          # 待补充
+        best_trade=0.0,         # TODO: 需 trade_profits 列表
+        worst_trade=0.0,        # TODO: 需 trade_profits 列表
+        avg_trade=0.0,          # TODO: 需 trade_profits 列表
+        # ATR 动态止损止盈统计（v0.3.0+）
+        stop_loss_count=stop_loss_count,
+        take_profit_count=take_profit_count,
+        grid_trade_count=grid_trade_count,
+        stop_loss_rate=round(stop_loss_rate, 4),
+        take_profit_rate=round(take_profit_rate, 4),
     )
 
 

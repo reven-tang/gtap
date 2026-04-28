@@ -22,11 +22,9 @@ class TestCalculateMetrics:
         fees = 0.0
 
         metrics = calculate_metrics(
-            asset_values=values,
-            trades=trades,
-            initial_investment=initial,
-            total_investment=total_invest,
-            total_fees=fees,
+        asset_values=values,
+        trades=trades,
+        total_fees=fees,
             start_date=start,
             end_date=dates[-1],
             risk_free_rate=0.03,
@@ -58,8 +56,6 @@ class TestCalculateMetrics:
             calculate_metrics(
                 asset_values=values,
                 trades=[],
-                initial_investment=10000,
-                total_investment=10000,
                 total_fees=0,
                 start_date=datetime(2024, 1, 2),
                 end_date=datetime(2024, 1, 1),
