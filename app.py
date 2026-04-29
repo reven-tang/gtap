@@ -136,7 +136,7 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
     show_quarterly = st.sidebar.checkbox("显示季频财务数据", value=False)
 
     st.sidebar.write("")
-    run_button = st.sidebar.button("▶️ 运行网格交易回测", type="primary", use_container_width=True)
+    run_button = st.sidebar.button("▶️ 运行网格交易回测", type="primary", width='stretch')
 
     # 构建配置对象
     config = GridTradingConfig(
@@ -224,7 +224,7 @@ def main() -> None:
                 st.warning(f"ATR 计算失败: {e}，将使用固定百分比止损")
                 atr_series = None
 
-    # ========== K 线图（无交易标注）==========
+    # ========== 股票数据概览 ==========
     st.header("📊 股票历史 K 线数据")
     latest = data.iloc[-1]
     col1, col2, col3, col4 = st.columns(4)
@@ -239,14 +239,10 @@ def main() -> None:
         pct_change = (latest["close"] / data.iloc[-2]["close"] - 1) * 100
         col6.metric("涨跌幅", f"{pct_change:.2f}%")
 
-    fig_kline = plot_kline(data, config.stock_code, atr_series=atr_series)
-    st.plotly_chart(fig_kline, use_container_width=True)
-
     # ========== 网格交易回测 ==========
     st.markdown("---")
     st.header("🔁 网格交易回测")
 
-    result = None
     with st.spinner("正在执行回测..."):
         try:
             result = grid_trading(data, config, atr_series=atr_series)
@@ -254,11 +250,11 @@ def main() -> None:
             st.error(f"回测失败: {e}")
             return
 
-    # ========== K 线图（带交易标注）==========
+    # ========== K 线图（含交易标注）==========
     st.markdown("---")
-    st.header("📊 交易标注 K 线图")
-    fig_kline_trades = plot_kline(data, config.stock_code, atr_series=atr_series, trades=result.trades)
-    st.plotly_chart(fig_kline_trades, use_container_width=True)
+    st.header("📊 K 线图 & 交易标注")
+    fig_kline = plot_kline(data, config.stock_code, atr_series=atr_series, trades=result.trades)
+    st.plotly_chart(fig_kline, width="stretch")
 
     # ---------- 交易记录 ----------
     st.subheader("📋 交易记录")
@@ -279,12 +275,12 @@ def main() -> None:
             for t in result.trades
         ]
     )
-    st.dataframe(trades_df, use_container_width=True, height=400)
+    st.dataframe(trades_df, width='stretch', height=400)
 
     # ---------- 资产曲线 ----------
     st.subheader("📈 资产价值变化")
     fig_asset = plot_asset_curve(data.index, result.asset_values)
-    st.plotly_chart(fig_asset, use_container_width=True)
+    st.plotly_chart(fig_asset, width='stretch')
 
     # ---------- 绩效指标 ----------
     st.subheader("📊 绩效指标")
@@ -328,7 +324,7 @@ def main() -> None:
     # 详细指标表格
     with st.expander("📑 详细指标表"):
         detail_df = pd.DataFrame([metrics])
-        st.dataframe(detail_df, use_container_width=True)
+        st.dataframe(detail_df, width='stretch')
 
 
 # ========== 运行入口 ==========
