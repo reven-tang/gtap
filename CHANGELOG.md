@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed 修复
 - 🔧 matplotlib 3.8.2 在 Python 3.14/macOS 上编译失败（freetype 2.6.1 兼容性问题），升级至 3.10.9
-- 🔧 pandas 3.x 日期解析严格化修复：`time` 字段为 8 位数字 (YYYYMMDD) 时，旧代码拼接为 `"2024-01-02 20240102"` 导致 to_datetime 失败。`data.py` 新增智能检测（8位数字 → 仅用 date 字段；否则 → 合并 date + time 前8位）
+- 🔧 pandas 3.x 日期解析严格化修复：baostock 日线 `time` 字段可能返回 `"20240102000000"`（14位数字，旧检查 `len==8` 漏掉此情况），导致拼接出 `"2024-01-02 20240102"` 无法解析。改为向量化正则 `^\d+$` 检测任意长度纯数字 + `numpy.where` + `format="mixed"` 彻底解决
 - 🔧 依赖版本升级：streamlit 1.39.0→1.57.0, numpy 1.26.4→2.4.4, pandas 2.2.3→3.0.2, baostock 0.8.9→0.9.1
 
 ### Known Issues 已知问题
