@@ -224,7 +224,7 @@ def main() -> None:
                 st.warning(f"ATR 计算失败: {e}，将使用固定百分比止损")
                 atr_series = None
 
-    # ========== K 线图 ==========
+    # ========== K 线图（无交易标注）==========
     st.header("📊 股票历史 K 线数据")
     latest = data.iloc[-1]
     col1, col2, col3, col4 = st.columns(4)
@@ -239,19 +239,26 @@ def main() -> None:
         pct_change = (latest["close"] / data.iloc[-2]["close"] - 1) * 100
         col6.metric("涨跌幅", f"{pct_change:.2f}%")
 
-    fig_kline = plot_kline(data, config.stock_code, atr_series=atr_series, trades=result.trades)
+    fig_kline = plot_kline(data, config.stock_code, atr_series=atr_series)
     st.plotly_chart(fig_kline, use_container_width=True)
 
     # ========== 网格交易回测 ==========
     st.markdown("---")
     st.header("🔁 网格交易回测")
 
+    result = None
     with st.spinner("正在执行回测..."):
         try:
             result = grid_trading(data, config, atr_series=atr_series)
         except GridTradingError as e:
             st.error(f"回测失败: {e}")
             return
+
+    # ========== K 线图（带交易标注）==========
+    st.markdown("---")
+    st.header("📊 交易标注 K 线图")
+    fig_kline_trades = plot_kline(data, config.stock_code, atr_series=atr_series, trades=result.trades)
+    st.plotly_chart(fig_kline_trades, use_container_width=True)
 
     # ---------- 交易记录 ----------
     st.subheader("📋 交易记录")
