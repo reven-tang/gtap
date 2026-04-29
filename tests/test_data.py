@@ -70,42 +70,32 @@ class TestGetStockData:
         mock_lg.error_code = "0"
         mock_lg.error_msg = ""
 
+        # K线数据 mock
         mock_rs = MagicMock()
         mock_rs.error_code = "0"
         mock_rs.fields = ["date", "time", "code", "open", "high", "low", "close", "volume"]
-        
-        # 模拟日线数据：time 字段返回日期格式 "20250102"
-        def row_generator():
-            yield ["2025-01-02", "20250102", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"]
-        
-        mock_rs.next.return_value = True
-        mock_rs.get_row_data.side_effect = row_generator()
+        mock_rs.next.side_effect = [True, False]  # 第一行为 True，然后 False 终止循环
+        mock_rs.get_row_data.return_value = [
+            "2025-01-02", "20250102", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"
+        ]
 
         mock_bs.login.return_value = mock_lg
         mock_bs.query_history_k_data_plus.return_value = mock_rs
-        mock_bs.query_dividend_data.return_value = mock_rs
-        mock_bs.query_stock_basic.return_value = mock_rs
 
-        # 其他查询返回空 DataFrame
-        for query_name in [
-            "query_profit_data", "query_operation_data", "query_growth_data",
-            "query_balance_data", "query_cash_flow_data", "query_dupont_data",
-            "query_performance_express_report", "query_forecast_report"
-        ]:
-            setattr(mock_bs, query_name, MagicMock(return_value=MagicMock(
-                error_code="0",
-                fields=[],
-                next=MagicMock(return_value=False),
-                get_row_data=MagicMock(return_value=[])
-            )))
-
+        # 其他查询返回空
+        mock_empty = MagicMock()
+        mock_empty.error_code = "0"
+        mock_empty.fields = []
+        mock_empty.next.return_value = False
+        mock_empty.get_row_data.return_value = []
+        mock_bs.query_dividend_data.return_value = mock_empty
+        mock_bs.query_stock_basic.return_value = mock_empty
         mock_bs.logout.return_value = None
 
         result = get_stock_data("sh.600000", "2025-01-02", "2025-01-02", frequency="d", show_quarterly=False)
 
         assert not result.kline.empty
         assert isinstance(result.kline.index, pd.DatetimeIndex)
-        # 验证 datetime 正确解析
         assert result.kline.index[0] == pd.Timestamp("2025-01-02 00:00:00")
 
     @patch("src.gtap.data.bs")
@@ -115,41 +105,32 @@ class TestGetStockData:
         mock_lg.error_code = "0"
         mock_lg.error_msg = ""
 
+        # K线数据 mock (2 行分钟线)
         mock_rs = MagicMock()
         mock_rs.error_code = "0"
         mock_rs.fields = ["date", "time", "code", "open", "high", "low", "close", "volume"]
-        
-        # 模拟 5 分钟线数据：time 字段返回时间格式 "09:35:00"
-        def row_generator():
-            yield ["2025-01-02", "09:35:00", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"]
-            yield ["2025-01-02", "09:40:00", "sh.600000", "10.2", "10.8", "10.1", "10.5", "8000"]
-        
-        mock_rs.next.return_value = True
-        mock_rs.get_row_data.side_effect = row_generator()
+        mock_rs.next.side_effect = [True, True, False]
+        mock_rs.get_row_data.side_effect = [
+            ["2025-01-02", "09:35:00", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"],
+            ["2025-01-02", "09:40:00", "sh.600000", "10.2", "10.8", "10.1", "10.5", "8000"],
+        ]
 
         mock_bs.login.return_value = mock_lg
         mock_bs.query_history_k_data_plus.return_value = mock_rs
-        mock_bs.query_dividend_data.return_value = mock_rs
-        mock_bs.query_stock_basic.return_value = mock_rs
 
-        for query_name in [
-            "query_profit_data", "query_operation_data", "query_growth_data",
-            "query_balance_data", "query_cash_flow_data", "query_dupont_data",
-            "query_performance_express_report", "query_forecast_report"
-        ]:
-            setattr(mock_bs, query_name, MagicMock(return_value=MagicMock(
-                error_code="0",
-                fields=[],
-                next=MagicMock(return_value=False),
-                get_row_data=MagicMock(return_value=[])
-            )))
-
+        # 其他查询返回空
+        mock_empty = MagicMock()
+        mock_empty.error_code = "0"
+        mock_empty.fields = []
+        mock_empty.next.return_value = False
+        mock_empty.get_row_data.return_value = []
+        mock_bs.query_dividend_data.return_value = mock_empty
+        mock_bs.query_stock_basic.return_value = mock_empty
         mock_bs.logout.return_value = None
 
         result = get_stock_data("sh.600000", "2025-01-02", "2025-01-02", frequency="5", show_quarterly=False)
 
         assert len(result.kline) == 2
         assert isinstance(result.kline.index, pd.DatetimeIndex)
-        # 验证时间正确解析
         assert result.kline.index[0] == pd.Timestamp("2025-01-02 09:35:00")
         assert result.kline.index[1] == pd.Timestamp("2025-01-02 09:40:00")
