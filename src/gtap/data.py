@@ -72,9 +72,20 @@ def get_stock_data(
 
         # 数据清洗：合并日期和时间为 datetime 索引
         if not kline_df.empty:
-            # baostock 的 time 字段格式示例: "2024-01-02 09:35:00"
-            # 部分返回格式可能是 "2024-01-02 09:35:00.000"
-            kline_df["datetime"] = pd.to_datetime(kline_df["date"] + " " + kline_df["time"].str[:8])
+            # baostock 的 time 字段格式因频率而异：
+            # - 日线/周线/月线：time 返回日期字符串 (如 "20250102")
+            # - 分钟线：time 返回时间字符串 (如 "09:35:00" 或 "09:35:00.000")
+            # pandas 3.x 对日期解析更严格，需要分别处理
+            def combine_datetime(row):
+                time_str = str(row["time"]) if row["time"] else ""
+                # 如果 time 是 8 位数字格式 (YYYYMMDD)，说明这是日期频率数据
+                if len(time_str) == 8 and time_str.isdigit():
+                    return row["date"]
+                # 否则是时间格式，截取前 8 位 (HH:MM:SS)
+                return row["date"] + " " + time_str[:8]
+            
+            kline_df["datetime"] = kline_df.apply(combine_datetime, axis=1)
+            kline_df["datetime"] = pd.to_datetime(kline_df["datetime"])
             kline_df = kline_df.set_index("datetime")
             # 数值列转换为 float
             numeric_cols = ["open", "high", "low", "close", "volume"]

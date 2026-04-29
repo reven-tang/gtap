@@ -31,9 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🔄 返回 `GridTradingResult` 时包含 ATR 统计字段
 
 ### Fixed 修复
-- 🔧 ATR 测试匹配错误（错误消息正则修正）
-- 🔧 `is_atr_stop_triggered` 止盈判断缺失（新增 `tp_multiplier` 参数）
-- 🔧 `is_atr_stop_triggered` 空头止盈/止损价位反转逻辑
+- 🔧 matplotlib 3.8.2 在 Python 3.14/macOS 上编译失败（freetype 2.6.1 兼容性问题），升级至 3.10.9
+- 🔧 pandas 3.x 日期解析更严格：`time` 字段为 8 位日期格式 (YYYYMMDD) 时合并失败，智能检测时间/日期格式
+- 🔧 依赖版本升级：streamlit 1.39.0→1.57.0, numpy 1.26.4→2.4.4, pandas 2.2.3→3.0.2, baostock 0.8.9→0.9.1
 
 ### Known Issues 已知问题
 - ⚠️ `@st.cache_data` 缓存尚未启用

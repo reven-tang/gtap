@@ -106,11 +106,11 @@ gtap/
 
 ## 🛠️ 技术栈
 
-- **前端**: Streamlit 1.50.0
-- **数据处理**: Pandas 2.3.3, NumPy 1.26.4+
-- **可视化**: Plotly 6.7.0, Matplotlib 3.9.4, mplfinance 0.12.10b0
-- **数据源**: baostock 0.9.9 (免费 A 股数据)
-- **测试**: pytest 8.x
+- **前端**: Streamlit 1.57.0
+- **数据处理**: Pandas 3.0.3, NumPy 2.4.4+
+- **可视化**: Plotly 6.7.0, Matplotlib 3.10.9, mplfinance 0.12.10b0
+- **数据源**: baostock 0.9.1 (免费 A 股数据)
+- **测试**: pytest 9.x
 
 ## ⚠️ 注意事项
 
