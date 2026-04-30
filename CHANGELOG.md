@@ -74,9 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `get_provider()`: 数据源工厂函数
   - `available_providers()`: 查询当前可用数据源
 - ✅ 代码标准化：每个 Provider 实现 normalize_code() 转换
-  - BaoStock: "601398" → "sh.601398"
-  - YFinance: "sh.601398" → "601398.SS"
-  - AkShare: "sh.601398" → "601398"
+  - BaoStock: "601398" → "sh.600958"
+  - YFinance: "sh.600958" → "601398.SS"
+  - AkShare: "sh.600958" → "601398"
 - ✅ `GridTradingConfig` 新增 `data_source` 字段（默认 "baostock"）
 - ✅ `data.py` 重构：get_stock_data 内部使用 DataProvider 抽象层
 - ✅ `app.py` 侧边栏数据源下拉选择 + 代码格式提示

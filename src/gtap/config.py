@@ -15,7 +15,7 @@ class GridTradingConfig:
     """网格交易配置参数"""
 
     # 股票代码
-    stock_code: str = "sh.601398"
+    stock_code: str = "sh.600958"
 
     # 日期范围
     start_date: str = "2024-01-01"

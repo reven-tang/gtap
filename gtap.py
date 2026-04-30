@@ -324,7 +324,7 @@ def main():
 
         # 股票代码及周期
         st.subheader('股票代码及周期参数')
-        stock_code = st.text_input('请输入股票代码（例如：sh.601398。sh：上海；sz：深圳）：', value='sh.601398')  # 股票代码输入框
+        stock_code = st.text_input('请输入股票代码（例如：sh.600958。sh：上海；sz：深圳）：', value='sh.600958')  # 股票代码输入框
         start_date = st.date_input('开始日期')  # 开始日期选择器
         end_date = st.date_input('结束日期')  # 结束日期选择器
 

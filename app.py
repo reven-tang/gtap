@@ -42,8 +42,8 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
 
     # ========== 基础设置 ==========
     with st.sidebar.expander("🎯 基础设置", expanded=True):
-        stock_code = st.text_input("股票代码", value="sh.601398",
-            help="沪市sh.601398；深市sz.000001")
+        stock_code = st.text_input("股票代码", value="sh.600958",
+            help="沪市sh.600958；深市sz.000001")
         col_d1, col_d2 = st.columns(2)
         with col_d1:
             start_date = st.date_input("开始日期", value=date(2024, 1, 1))
@@ -60,8 +60,8 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
                                    "yfinance": "YFinance (港美股)",
                                    "akshare": "AkShare (A股增强)"}.get(x, x))
         if data_source != "baostock":
-            hint = {"yfinance": "A股：601398.SS / 美股：AAPL",
-                    "akshare": "纯数字：601398 / 000001"}.get(data_source, "")
+            hint = {"yfinance": "A股：600958.SS / 美股：AAPL",
+                    "akshare": "纯数字：600958 / 000001"}.get(data_source, "")
             if hint:
                 st.info(f"💡 代码格式: {hint}")
 
