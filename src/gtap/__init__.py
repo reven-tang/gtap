@@ -30,6 +30,9 @@ from .exceptions import (
     PlotError,
 )
 from .atr import calculate_atr, get_atr_stop_levels
+from .strategies import StrategyEngine, TradeSignal, GridStrategy, RebalanceStrategy, create_strategy
+from .portfolio import PortfolioAssetConfig, PortfolioConfig, PortfolioResult, portfolio_backtest, PortfolioError
+from .parrondo import ParrondoConfig, ParrondoRound, ParrondoResult, parrondo_simulate, parrondo_grid_analysis
 from .providers import DataProvider, get_provider, available_providers
 from .providers.baostock_provider import BaoStockProvider
 
@@ -58,6 +61,24 @@ __all__ = [
     # atr
     "calculate_atr",
     "get_atr_stop_levels",
+    # strategies
+    "StrategyEngine",
+    "TradeSignal",
+    "GridStrategy",
+    "RebalanceStrategy",
+    "create_strategy",
+    # portfolio
+    "PortfolioAssetConfig",
+    "PortfolioConfig",
+    "PortfolioResult",
+    "portfolio_backtest",
+    "PortfolioError",
+    # parrondo
+    "ParrondoConfig",
+    "ParrondoRound",
+    "ParrondoResult",
+    "parrondo_simulate",
+    "parrondo_grid_analysis",
     # providers
     "DataProvider",
     "get_provider",

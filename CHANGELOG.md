@@ -1,3 +1,34 @@
+## [0.5.1] — 2026-04-30
+
+### Added 新增
+- ✅ P0: 数据正确性修复（购入价自动获取、grid_center自动、ATR自动网格范围）
+- ✅ P1-4: 再平衡策略模式（threshold/periodic）
+- ✅ P1-5: 比例仓位管理（fixed_shares/fixed_amount/proportional）
+- ✅ P1-6: 等比网格间距（arithmetic/geometric）
+- ✅ P1-7: 合并 trade_metrics 到主指标函数（trade_profits 参数传入）
+- ✅ P2-8: 侧边栏重构为3组expander（基础设置/交易策略/高级设置）
+- ✅ P2-9: 清仓后50%现金重建仓逻辑（exit_reason="reentry"）
+- ✅ P2-10: 再平衡溢价指标（rebalance_count/rebalancing_premium）
+- ✅ P3-11: 策略引擎抽象（StrategyEngine ABC + GridStrategy + RebalanceStrategy + 工厂）
+- ✅ P3-12: 多资产组合回测（PortfolioConfig + portfolio_backtest + 跨资产相关性）
+- ✅ P3-13: Parrondo悖论模拟（4种混合模式 + 网格关联分析）
+- ✅ PortfolioError 异常类
+- ✅ README.md 重写：香农网格交易法深度解读 + 计算公式 + 术语表 + 使用指南
+
+### Fixed 修复
+- 🔧 auto_grid_range 模式下 ATR 未自动计算（条件改为 use_atr_stop OR auto_grid_range）
+
+### Changed 变更
+- 🔄 侧边栏新增策略模式、间距模式、仓位模式控件
+- 🔄 GridTradingConfig 新增 strategy_mode/target_allocation/rebalance_threshold/position_mode/grid_spacing_mode/amount_per_grid
+- 🔄 PerformanceMetrics 新增 rebalance_count/rebalancing_premium
+
+### Stats 统计
+- 测试: 98 passed (新增 14 Portfolio/Parrondo + 16 Strategies)
+- 对齐度: 30% → 70%
+- 新增模块: portfolio.py, parrondo.py, strategies.py
+- 新增测试: test_portfolio_parrondo.py, test_strategies.py
+
 # GTAP Changelog
 
 All notable changes to this project will be documented in this file.

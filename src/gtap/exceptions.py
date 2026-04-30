@@ -11,6 +11,7 @@ __all__ = [
     "ConfigError",
     "MetricsError",
     "PlotError",
+    "PortfolioError",
 ]
 
 
@@ -42,4 +43,9 @@ class MetricsError(Exception):
 
 class PlotError(Exception):
     """图表绘制异常"""
+    pass
+
+
+class PortfolioError(Exception):
+    """组合回测异常"""
     pass

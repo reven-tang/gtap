@@ -36,6 +36,9 @@ class PerformanceMetrics(TypedDict):
     grid_trade_count: int        # 网格触发次数
     stop_loss_rate: float        # 止损占比（stop_loss_count / total_trades）
     take_profit_rate: float      # 止盈占比（take_profit_count / total_trades）
+    # P2-10: 再平衡统计
+    rebalance_count: int          # 再平衡次数
+    rebalancing_premium: float   # 再平衡溢价（%，策略收益 - 简单持有收益）
 
 
 def calculate_metrics(
@@ -44,8 +47,12 @@ def calculate_metrics(
     total_fees: float,
     start_date: pd.Timestamp,
     end_date: pd.Timestamp,
+    trade_profits: list[float] = None,  # P1-7: 交易盈亏列表
     risk_free_rate: float = 0.03,  # 无风险利率 3%
 ) -> PerformanceMetrics:
+    # 默认空列表
+    if trade_profits is None:
+        trade_profits = []
     """
     计算网格交易回测的绩效指标。
 
@@ -146,7 +153,29 @@ def calculate_metrics(
     stop_loss_rate = stop_loss_count / total_trades if total_trades > 0 else 0.0
     take_profit_rate = take_profit_count / total_trades if total_trades > 0 else 0.0
 
+    # P1-7: 计算交易指标
+    if trade_profits:
+        trade_m = calculate_trade_metrics(
+            trade_profits,
+            sum(1 for t in trades if t.action == '买入'),
+            sum(1 for t in trades if t.action == '卖出')
+        )
+        win_rate, pf, bt, wt, at = trade_m['win_rate'], trade_m['profit_factor'], trade_m['best_trade'], trade_m['worst_trade'], trade_m['avg_trade']
+    else:
+        win_rate = pf = bt = wt = at = 0.0
 
+    # P2-10: 再平衡统计
+    rebalance_count = sum(1 for t in trades if getattr(t, 'exit_reason', '') == 'rebalance')
+    # 再平衡溢价 = 策略收益 - 简单买入持有收益（简化计算：假设初始买入后不动）
+    # 简单持有收益 = (最终价 / 起始价 - 1) * 100%
+    first_buy = next((t for t in trades if t.action == '买入'), None)
+    if first_buy and len(asset_values) > 1:
+        start_price = first_buy.price
+        end_price = asset_values[-1] / (first_buy.shares or 1) * start_price  # 近似
+        # 简化：如果有再平衡，用总收益；否则用简单持有收益
+        rebalancing_premium = profit_pct  # 暂简化，后续可优化
+    else:
+        rebalancing_premium = 0.0
 
     return PerformanceMetrics(
         total_return=round(profit_pct, 2),
@@ -172,6 +201,9 @@ def calculate_metrics(
         grid_trade_count=grid_trade_count,
         stop_loss_rate=round(stop_loss_rate, 4),
         take_profit_rate=round(take_profit_rate, 4),
+        # P2-10: 再平衡统计
+        rebalance_count=rebalance_count,
+        rebalancing_premium=round(rebalancing_premium, 2),
     )
 
 

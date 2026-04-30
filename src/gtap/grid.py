@@ -78,13 +78,9 @@ def grid_trading(
         raise GridTradingError(f"数据缺少必需列: {missing}")
 
     # 参数解构
-    grid_upper = config.grid_upper
-    grid_lower = config.grid_lower
     grid_number = config.grid_number
-    grid_center = config.grid_center
     shares_per_grid = config.shares_per_grid
     initial_shares = config.initial_shares
-    current_holding_price = config.current_holding_price
     total_investment = config.total_investment
     stock_code = config.stock_code
     commission_rate = config.commission_rate
@@ -95,14 +91,50 @@ def grid_trading(
     atr_stop_multiplier = config.atr_stop_multiplier
     atr_tp_multiplier = config.atr_tp_multiplier
 
+    # === P1: 策略模式和仓位参数 ===
+    strategy_mode = config.strategy_mode
+    target_allocation = config.target_allocation
+    rebalance_threshold = config.rebalance_threshold
+    position_mode = config.position_mode
+    amount_per_grid = config.amount_per_grid
+    grid_spacing_mode = config.grid_spacing_mode
+
+    # === P0-1 & P0-2: 自动获取起始日收盘价 ===
+    entry_price = float(data.iloc[0]['close'])
+    current_holding_price = entry_price
+    grid_center = config.grid_center if config.grid_center is not None else entry_price
+
+    # === P0-3: ATR 自动网格范围 ===
+    if config.auto_grid_range:
+        if atr_series is not None:
+            valid_atr = atr_series.dropna()
+            if len(valid_atr) > 0:
+                avg_atr = float(valid_atr.mean())
+                atr_mult = config.grid_range_atr_multiplier
+                grid_lower = entry_price - avg_atr * atr_mult
+                grid_upper = entry_price + avg_atr * atr_mult
+            else:
+                raise GridTradingError("自动网格范围模式需要有效 ATR 数据")
+        else:
+            raise GridTradingError("自动网格范围模式需要传入 atr_series")
+    else:
+        grid_upper = config.grid_upper
+        grid_lower = config.grid_lower
+
     # 预计算网格线价格
-    grid_step = (grid_upper - grid_lower) / (grid_number - 1)
-    grid_prices = [grid_lower + i * grid_step for i in range(grid_number)]
+    if grid_spacing_mode == "geometric" and grid_lower > 0 and grid_upper > grid_lower:
+        grid_ratio = (grid_upper / grid_lower) ** (1 / (grid_number - 1))
+        grid_prices = [grid_lower * (grid_ratio ** i) for i in range(grid_number)]
+        grid_step = (grid_upper - grid_lower) / (grid_number - 1)  # 仅用于显示
+    else:
+        # 等差网格（默认）
+        grid_step = (grid_upper - grid_lower) / (grid_number - 1)
+        grid_prices = [grid_lower + i * grid_step for i in range(grid_number)]
 
     # 初始状态
-    cash = total_investment - (current_holding_price * initial_shares)
+    cash = total_investment - (entry_price * initial_shares)
     shares = initial_shares
-    total_buy_volume = initial_shares * current_holding_price
+    total_buy_volume = initial_shares * entry_price
     total_sell_volume = 0.0
     total_buy_count = 1  # 初次买入计入
     total_sell_count = 0
@@ -110,33 +142,33 @@ def grid_trading(
     asset_values: list[float] = []
     total_fees_acc = 0.0
     current_grid_center = grid_center
-    avg_price = current_holding_price
+    avg_price = entry_price
     # ATR 统计
     stop_loss_count = 0
     take_profit_count = 0
     grid_trade_count = 0
 
     # 计算初次买入费用
-    first_buy_amount = initial_shares * current_holding_price
+    first_buy_amount = initial_shares * entry_price
     _, _, _, first_fee = calculate_fees(
         first_buy_amount, True, stock_code, commission_rate, transfer_fee_rate, stamp_duty_rate
     )
     cash -= first_fee
     total_fees_acc += first_fee
 
-    # 记录初次买入交易（初始 ATR 相关字段为 0，exit_reason="grid"）
+    # 记录初次买入交易
     trades: list[Trade] = [
         Trade(
             action="买入",
             timestamp=data.index[0],
-            price=current_holding_price,
+            price=entry_price,
             shares=initial_shares,
             total_shares=initial_shares,
             commission=0.0,
             transfer_fee=0.0,
             stamp_duty=0.0,
             total_fee=first_fee,
-            avg_price=current_holding_price,
+            avg_price=entry_price,
             atr_value=0.0,
             stop_loss_price=0.0,
             take_profit_price=0.0,
@@ -229,12 +261,174 @@ def grid_trading(
         current_grid_lower = max(lower_grids) if lower_grids else grid_lower
         current_grid_upper = min(upper_grids) if upper_grids else grid_upper
 
-        # 如果已清仓，直接记录资产价值并 continue
+        # 如果已清仓，检查是否应重新建仓（P2-9）
         if shares == 0:
-            asset_values.append(cash)
-            continue
+            # 重新建仓条件：价格回到网格范围内且有足够现金
+            rebuy_shares = 0
+            if price >= grid_lower and price <= grid_upper:
+                # 用当前现金的一部分重新建仓
+                rebuy_amount = min(cash * 0.5, cash - 5)  # 预留5元最低
+                if rebuy_amount > 5:
+                    rebuy_shares = int(rebuy_amount / price)
+                    if rebuy_shares > 0:
+                        rebuy_total = rebuy_shares * price
+                        commission, tf, sd, fee = calculate_fees(
+                            rebuy_total, True, stock_code, commission_rate, transfer_fee_rate, stamp_duty_rate
+                        )
+                        if cash >= rebuy_total + fee:
+                            cash -= rebuy_total + fee
+                            shares = rebuy_shares
+                            total_buy_volume += rebuy_total
+                            total_buy_count += 1
+                            total_fees_acc += fee
+                            avg_price = price
+                            current_grid_center = grid_center
+                            # 重新找到最近的网格线
+                            lower_grids = [gp for gp in grid_prices if gp < current_grid_center]
+                            upper_grids = [gp for gp in grid_prices if gp > current_grid_center]
+                            current_grid_lower = max(lower_grids) if lower_grids else grid_lower
+                            current_grid_upper = min(upper_grids) if upper_grids else grid_upper
 
-        # ========== 买入逻辑 ==========
+                            trades.append(
+                                Trade(
+                                    action="买入",
+                                    timestamp=timestamp,
+                                    price=price,
+                                    shares=rebuy_shares,
+                                    total_shares=shares,
+                                    commission=commission,
+                                    transfer_fee=tf,
+                                    stamp_duty=sd,
+                                    total_fee=fee,
+                                    avg_price=avg_price,
+                                    atr_value=atr_value if use_atr_stop else 0.0,
+                                    stop_loss_price=0.0,
+                                    take_profit_price=0.0,
+                                    exit_reason="reentry",
+                                )
+                            )
+                            grid_trade_count += 1
+
+            # 如果没有重新建仓，记录纯现金资产
+            if shares == 0:
+                asset_values.append(cash)
+                continue
+
+        # ========== P1-4: 再平衡策略检查 ==========
+        # 计算当前资产总值和股票占比
+        total_value = cash + shares * price
+        current_stock_ratio = (shares * price) / total_value if total_value > 0 else 0.0
+
+        # 再平衡模式：基于阈值偏离触发
+        if strategy_mode == "rebalance_threshold":
+            deviation = abs(current_stock_ratio - target_allocation)
+            if deviation > rebalance_threshold:
+                # 需要再平衡
+                target_stock_value = total_value * target_allocation
+                current_stock_value = shares * price
+                diff = target_stock_value - current_stock_value
+
+                if diff > 0:  # 需要买入
+                    buy_amount = min(diff, cash)  # 不超过可用现金
+                    if buy_amount > 5:  # 至少买 5 元
+                        buy_shares = int(buy_amount / price)
+                        if buy_shares > 0:
+                            # position_mode 处理
+                            if position_mode == "fixed_amount":
+                                buy_shares = int(amount_per_grid / price)
+                                buy_amount = buy_shares * price
+                            elif position_mode == "proportional":
+                                # proportional: 一次性调整到目标
+                                buy_shares = int(diff / price)
+                                buy_amount = buy_shares * price
+
+                            commission, tf, sd, fee = calculate_fees(
+                                buy_amount, True, stock_code, commission_rate, transfer_fee_rate, stamp_duty_rate
+                            )
+                            if cash >= buy_amount + fee:
+                                cash -= buy_amount + fee
+                                shares += buy_shares
+                                total_buy_volume += buy_amount
+                                total_buy_count += 1
+                                total_fees_acc += fee
+
+                                total_cost = (shares - buy_shares) * avg_price + buy_amount
+                                avg_price = total_cost / shares if shares > 0 else 0.0
+
+                                trades.append(
+                                    Trade(
+                                        action="买入",
+                                        timestamp=timestamp,
+                                        price=price,
+                                        shares=buy_shares,
+                                        total_shares=shares,
+                                        commission=commission,
+                                        transfer_fee=tf,
+                                        stamp_duty=sd,
+                                        total_fee=fee,
+                                        avg_price=avg_price,
+                                        atr_value=atr_value if use_atr_stop else 0.0,
+                                        stop_loss_price=0.0,
+                                        take_profit_price=0.0,
+                                        exit_reason="rebalance",
+                                    )
+                                )
+                                grid_trade_count += 1
+
+                elif diff < 0:  # 需要卖出
+                    sell_amount = min(-diff, shares * price)  # 不超过持仓市值
+                    if sell_amount > 5:
+                        sell_shares = int(sell_amount / price)
+                        sell_shares = min(sell_shares, shares)
+                        if sell_shares > 0:
+                            sell_amount = sell_shares * price
+
+                            commission, tf, sd, fee = calculate_fees(
+                                sell_amount, False, stock_code, commission_rate, transfer_fee_rate, stamp_duty_rate
+                            )
+
+                            cash += sell_amount - fee
+                            total_sell_volume += sell_amount
+                            total_sell_count += 1
+                            total_fees_acc += fee
+
+                            cost_basis = sell_shares * avg_price
+                            profit = sell_amount - cost_basis - fee
+                            trade_profits.append(profit)
+
+                            shares -= sell_shares
+                            if shares > 0:
+                                total_cost = (shares + sell_shares) * avg_price - sell_amount
+                                avg_price = total_cost / shares
+                            else:
+                                avg_price = 0.0
+
+                            trades.append(
+                                Trade(
+                                    action="卖出",
+                                    timestamp=timestamp,
+                                    price=price,
+                                    shares=sell_shares,
+                                    total_shares=shares,
+                                    commission=commission,
+                                    transfer_fee=tf,
+                                    stamp_duty=sd,
+                                    total_fee=fee,
+                                    avg_price=avg_price,
+                                    atr_value=atr_value if use_atr_stop else 0.0,
+                                    stop_loss_price=0.0,
+                                    take_profit_price=0.0,
+                                    exit_reason="rebalance",
+                                )
+                            )
+                            grid_trade_count += 1
+
+                # 再平衡后记录资产值并继续
+                asset_value = cash + shares * price
+                asset_values.append(asset_value)
+                continue
+
+        # ========== 经典网格交易模式 ==========
         if price < current_grid_lower:
             # 计算跨越的网格数（整除向下取整，至少 1 格）
             grids = int((current_grid_center - price) // grid_step) if grid_step > 0 else 0

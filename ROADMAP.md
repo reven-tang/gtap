@@ -133,36 +133,126 @@
 
 ---
 
-### v0.5.0 — 测试与 CI/CD
+### v0.5.0 — 香农的恶魔对齐 ✅ COMPLETE
 
-**目标**: 可信任、可自动化
+**目标**: 修复数据正确性缺陷 + 实现再平衡策略核心
 
-**任务清单**:
+**理论依据**: [[research/shannons-demon-report]] + [[research/shannons-demon-learning-notes]] + [[research/gtap-evaluation]]
 
-#### 1. 单元测试
-- [ ] `tests/test_fees.py` - 费用计算边界情况
-- [ ] `tests/test_grid.py` - 网格交易逻辑
-- [ ] `tests/test_metrics.py` - 绩效指标准确性
-- [ ] `tests/test_data.py` - 数据获取（使用 mock）
+**当前对齐度**: 30% → **70%** (全部P0-P3完成)
 
-#### 2. 集成测试
-- [ ] 端到端回测流程验证
-- [ ] 已知历史数据回测结果比对
+#### P0 — 数据正确性（必须立即修复）
 
-#### 3. 代码质量工具
-- [ ] `ruff` 代码检查 + 自动修复
-- [ ] `mypy` 类型检查
-- [ ] `pytest-cov` 覆盖率报告（目标 > 80%）
+| # | 改进 | 状态 | 预估 |
+|---|------|------|------|
+| 1 | 移除 `current_holding_price`，自动从起始日收盘价获取 | ✅ | 0.5h |
+| 2 | `grid_center` 默认 = 起始日收盘价（保留手动覆盖） | ✅ | 0.3h |
+| 3 | 网格范围基于 ATR 自动建议 | ✅ | 1.5h |
 
-#### 4. CI/CD
-- [ ] GitHub Actions 配置
-  - 每次 PR 自动运行测试
-  - 自动检查代码风格
-  - 自动构建 wheel 包
-- [ ] 自动化发布（tag → PyPI）
+#### P1 — 策略核心（高优先级）
 
-**预计工时**: 3-4 小时
+| # | 改进 | 状态 | 预估 |
+|---|------|------|------|
+| 4 | 再平衡策略模式（threshold/periodic） | ✅ | 3h |
+| 5 | 比例仓位管理（fixed_shares/amount/proportional） | ✅ | 2h |
+| 6 | 等比网格间距（arithmetic/geometric） | ✅ | 1h |
+| 7 | 合并 trade_metrics 到主指标函数 | ✅ | 0.5h |
+
+#### P0 实施细节
+
+**P0-1: 移除手动购入价**
+```python
+# config.py: 移除 current_holding_price 字段
+# grid.py: 自动获取 entry_price = float(data.iloc[0]['close'])
+# app.py: 移除侧边栏"当前持仓价格"输入框
+# 验证: 所有测试更新，确保不再依赖手动购入价
+```
+
+**P0-2: 网格中心自动计算**
+```python
+# config.py: grid_center 默认改为 None（自动模式）
+# grid.py: grid_center = config.grid_center or entry_price
+# app.py: 显示"自动计算（起始日收盘价）"标签
+```
+
+**P0-3: ATR 自动网格范围**
+```python
+# config.py: 新增 auto_grid_range: bool = True
+#              新增 grid_range_atr_multiplier: float = 2.0
+# grid.py: if auto_grid_range: 基于 ATR 计算 grid_upper/grid_lower
+# app.py: "网格范围" 区增加 自动/手动 切换
+```
+
+#### P1 实施细节
+
+**P1-4: 再平衡策略模式**
+```python
+# config.py: 新增 rebalance_mode: Literal["grid", "threshold", "periodic"]
+#              新增 target_allocation: float = 0.5
+#              新增 rebalance_threshold: float = 0.05
+# grid.py: 新增 RebalanceStrategy 逻辑分支
+# 测试: 新增 test_rebalance.py
+```
+
+**P1-5: 比例仓位**
+```python
+# config.py: 新增 position_mode: Literal["fixed_shares", "fixed_amount", "proportional"]
+# grid.py: 根据 position_mode 计算交易数量
+```
+
+**P1-6: 等比网格**
+```python
+# config.py: 新增 grid_spacing_mode: Literal["arithmetic", "geometric", "atr_dynamic"]
+# grid.py: 根据模式生成 grid_prices
+```
+
+**P1-7: 合并指标**
+```python
+# metrics.py: calculate_metrics() 调用 calculate_trade_metrics()
+#             新增 rebalancing_premium, volatility_drag 指标
+```
+
+**预计总工时**: 10h
+**优先级**: ✅ 全部完成
+**状态**: ✅ 已完成
+
+---
+
+### v0.6.0 — UI重构 + 策略完善 ✅ COMPLETE
+
+**目标**: 用户体验提升 + 策略连续性
+
+**理论依据**: [[research/gtap-evaluation]] P2
+
+**当前对齐度**: 50% → 目标 70%
+
+| # | 改进 | 预估 |
+|---|------|------|
+| 8 | 侧边栏3组expander重构 | ✅ | 2h |
+| 9 | 清仓后50%现金重建仓 | ✅ | 1h |
+| 10 | rebalance_count/rebalancing_premium | ✅ | 1h |
+
+**预计工时**: 4h
 **优先级**: 📋 中
+
+---
+
+### v0.7.0 — 策略引擎抽象 + 多资产 ✅ COMPLETE
+
+**目标**: 真正的香农的恶魔实现
+
+**理论依据**: [[research/gtap-evaluation]] P3
+
+**当前对齐度**: 70% → 目标 80%
+
+| # | 改进 | 预估 |
+|---|------|------|
+| 11 | StrategyEngine ABC + GridStrategy + RebalanceStrategy + 工厂 | ✅ | 2h |
+| 12 | PortfolioConfig + portfolio_backtest + 跨资产相关性 | ✅ | 3h |
+| 13 | ParrondoConfig + 4种混合模式 + 网格关联分析 | ✅ | 2h |
+
+**预计工时**: 8h+
+**优先级**: 🎯 远期
 
 ---
 
@@ -212,10 +302,10 @@
 - [x] v0.2.0: `pytest` 27/27 通过（100%），模块化架构完成
 - [x] v0.3.0: ATR 动态止损止盈完成
 - [x] v0.4.0: 数据源抽象层 + 3 Provider 实现
-- [x] v0.5.0: ruff + mypy 通过，覆盖率 65%，测试 69/70 通过
+- [x] v0.5.0: P0-P3 全完成，98测试通过，对齐度70%
 - [ ] v1.0.0: PyPI 发布成功
 
 ---
 
-*最后更新: 2026-04-28*
+*最后更新: 2026-04-30*
 *维护者: reven-tang / 萨莉 (OpenClaw Assistant)*

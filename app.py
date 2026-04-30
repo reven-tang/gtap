@@ -37,135 +37,94 @@ st.set_page_config(
 
 # ========== 侧边栏参数配置 ==========
 def sidebar_config() -> Tuple[GridTradingConfig, bool]:
-    """渲染侧边栏并返回配置对象 + 运行按钮状态"""
+    """渲染侧边栏并返回配置对象 + 运行按钮状态
 
-    st.sidebar.title("Grid Trading Analysis Platform")
-    st.markdown("<style>h1{text-align: center;}</style>", unsafe_allow_html=True)
-    st.sidebar.markdown("---")
+    P2-8: 按用户意图分组（基础/策略/高级）
+    """
 
-    # ---- 股票代码与周期 ----
-    st.sidebar.subheader("股票代码及周期参数")
-    stock_code = st.sidebar.text_input(
-        "请输入股票代码（例如：sh.601398）",
-        value="sh.601398",
-        help="沪市：sh.601398；深市：sz.000001",
-    )
-    start_date = st.sidebar.date_input("开始日期", value=date(2024, 1, 1))
-    end_date = st.sidebar.date_input("结束日期", value=date(2024, 12, 31))
+    st.sidebar.title("📈 GTAP 回测平台")
 
-    # ---- 网格参数 ----
-    st.sidebar.subheader("网格交易参数")
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        grid_upper = st.sidebar.number_input("网格上限", value=6.0, step=0.01, format="%.2f")
-        grid_lower = st.sidebar.number_input("网格下限", value=4.0, step=0.01, format="%.2f")
-        grid_number = st.sidebar.number_input("网格数量", value=10, min_value=2, step=1)
-    with col2:
-        grid_center = st.sidebar.number_input("网格中心价格", value=5.0, step=0.01, format="%.2f")
-        current_holding_price = st.sidebar.number_input("当前持仓价格", value=5.0, step=0.01, format="%.2f")
-        initial_shares = st.sidebar.number_input("初次买入股数", value=100, min_value=1, step=1)
+    # ========== 基础设置 ==========
+    with st.sidebar.expander("🎯 基础设置", expanded=True):
+        stock_code = st.text_input("股票代码", value="sh.601398", help="沪市sh.601398；深市sz.000001")
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            start_date = st.date_input("开始日期", value=date(2024, 1, 1))
+        with col_d2:
+            end_date = st.date_input("结束日期", value=date(2024, 12, 31))
+        total_investment = st.number_input("投入总资金", value=10000.0, min_value=0.0, step=100.0, format="%.2f")
+        initial_shares = st.number_input("初次买入股数", value=100, min_value=1, step=1)
+        shares_per_grid = st.number_input("每格交易股数", value=100, min_value=1, step=1)
 
-    shares_per_grid = st.sidebar.number_input("每个网格交易股数", value=100, min_value=1, step=1)
-    total_investment = st.sidebar.number_input(
-        "预计投入总资金", value=10000.0, min_value=0.0, step=100.0, format="%.2f"
-    )
+        from src.gtap.providers.factory import available_providers
+        available = available_providers()
+        data_source = st.selectbox("数据源", options=available, index=0,
+            format_func=lambda x: {"baostock": "BaoStock (A股免费)", "yfinance": "YFinance (港美股)", "akshare": "AkShare (A股增强)"}.get(x, x))
+        code_hint = {"baostock": "沪市：sh.601398；深市：sz.000001", "yfinance": "A股：601398.SS / 美股：AAPL / 港股：0700.HK", "akshare": "纯数字：601398 / 000001"}.get(data_source, "请输入股票代码")
+        if data_source != "baostock":
+            st.info(f"💡 {data_source} 代码格式: {code_hint}")
 
-    # 计算并显示网格价差
-    grid_step = (grid_upper - grid_lower) / (grid_number - 1) if grid_number > 1 else 0.0
-    st.sidebar.text_input(
-        "网格价差（自动计算）",
-        value=f"{grid_step:.4f}",
-        disabled=True,
-        help="网格间距 = (上限 - 下限) / (网格数 - 1)",
-    )
-    remaining = total_investment - current_holding_price * initial_shares
-    st.sidebar.text_input(
-        "剩余资金（未扣除手续费）",
-        value=f"{remaining:.2f}",
-        disabled=True,
-    )
+    # ========== 交易策略 ==========
+    with st.sidebar.expander("📊 交易策略", expanded=True):
+        auto_grid_range = st.checkbox("自动网格范围", value=False, help="基于 ATR 自动计算上下限")
+        if auto_grid_range:
+            grid_range_mult = st.slider("ATR 乘数", min_value=0.5, max_value=5.0, value=2.0, step=0.1, format="%.1f")
+            grid_upper = st.number_input("网格上限", value=6.0, step=0.01, format="%.2f", disabled=True)
+            grid_lower = st.number_input("网格下限", value=4.0, step=0.01, format="%.2f", disabled=True)
+        else:
+            grid_range_mult = 2.0
+            grid_upper = st.number_input("网格上限", value=6.0, step=0.01, format="%.2f")
+            grid_lower = st.number_input("网格下限", value=4.0, step=0.01, format="%.2f")
 
-    # ---- 交易费用 ----
-    st.sidebar.subheader("交易费用参数")
-    commission_rate = st.sidebar.number_input(
-        "佣金费率", value=0.0003, min_value=0.0, format="%.4f", help="默认 0.03%，最低 5 元"
-    )
-    transfer_fee_rate = st.sidebar.number_input(
-        "过户费费率", value=0.00001, min_value=0.0, format="%.5f", help="沪市收取，默认 0.001%"
-    )
-    stamp_duty_rate = st.sidebar.number_input(
-        "印花税费率", value=0.001, min_value=0.0, format="%.4f", help="卖出时收取，默认 0.1%"
-    )
+        grid_number = st.number_input("网格数量", value=10, min_value=2, step=1)
+        grid_center_manual = st.checkbox("手动设定网格中心", value=False, help="默认=起始日收盘价")
+        grid_center = st.number_input("网格中心", value=5.0, step=0.01, format="%.2f", disabled=not grid_center_manual) if grid_center_manual else None
 
-    # ---- 数据源选项 ----
-    st.sidebar.subheader("数据源选项")
-    
-    # 数据源选择
-    from src.gtap.providers.factory import available_providers
-    available = available_providers()
-    data_source = st.sidebar.selectbox(
-        "数据源",
-        options=available,
-        index=0,
-        format_func=lambda x: {
-            "baostock": "BaoStock (A股免费)",
-            "yfinance": "YFinance (港美股)",
-            "akshare": "AkShare (A股增强)",
-        }.get(x, x),
-        help="选择数据源。BaoStock 支持 A 股；YFinance 支持港美股；AkShare 提供更丰富 A 股数据",
-    )
-    
-    # 根据数据源调整代码提示
-    code_hint = {
-        "baostock": "沪市：sh.601398；深市：sz.000001",
-        "yfinance": "A股：601398.SS / 美股：AAPL / 港股：0700.HK",
-        "akshare": "纯数字：601398 / 000001",
-    }.get(data_source, "请输入股票代码")
-    
-    # 更新股票代码输入提示（仅 yfinance/akshare 时显示额外提示）
-    if data_source != "baostock":
-        st.sidebar.info(f"💡 {data_source} 代码格式: {code_hint}")
+        grid_spacing_mode = st.selectbox("网格间距", options=["arithmetic", "geometric"],
+            format_func=lambda x: {"arithmetic": "等差间距", "geometric": "等比间距"}.get(x, x))
 
-    frequency = st.sidebar.selectbox(
-        "K线频率",
-        options=["5", "15", "30", "60", "d", "w", "m"],
-        index=0,
-        format_func=lambda x: {
-            "5": "5分钟",
-            "15": "15分钟",
-            "30": "30分钟",
-            "60": "60分钟",
-            "d": "日线",
-            "w": "周线",
-            "m": "月线",
-        }.get(x, x),
-    )
-    adjustflag = st.sidebar.selectbox(
-        "复权类型",
-        options=["1", "2", "3"],
-        index=2,
-        format_func=lambda x: {"1": "前复权", "2": "后复权", "3": "不复权"}.get(x, x),
-    )
+        strategy_mode = st.selectbox("策略模式", options=["grid", "rebalance_threshold", "rebalance_periodic"],
+            format_func=lambda x: {"grid": "经典网格", "rebalance_threshold": "阈值再平衡", "rebalance_periodic": "周期再平衡"}.get(x, x))
+        if strategy_mode in ("rebalance_threshold", "rebalance_periodic"):
+            target_allocation = st.slider("目标股票比例", min_value=0.1, max_value=0.9, value=0.5, step=0.05, format_func=lambda x: f"{x*100:.0f}%")
+            rebalance_threshold = st.slider("再平衡阈值", min_value=0.01, max_value=0.20, value=0.05, step=0.01, format_func=lambda x: f"{x*100:.0f}%")
+        else:
+            target_allocation = 0.5
+            rebalance_threshold = 0.05
 
-    # ---- ATR 动态止损止盈（v0.3.0）----
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("ATR 动态止损止盈")
-    use_atr_stop = st.sidebar.checkbox("启用 ATR 止损止盈", value=False, help="使用 ATR 动态止损止盈，默认关闭")
-    if use_atr_stop:
-        atr_period = st.sidebar.slider("ATR 计算周期", min_value=5, max_value=30, value=14, step=1)
-        atr_stop_mult = st.sidebar.slider("止损乘数", min_value=0.5, max_value=5.0, value=1.5, step=0.1, format="%.1f")
-        atr_tp_mult = st.sidebar.slider("止盈乘数", min_value=0.0, max_value=2.0, value=0.5, step=0.1, format="%.1f")
-    else:
-        atr_period = 14
-        atr_stop_mult = 1.5
-        atr_tp_mult = 0.5
+        position_mode = st.selectbox("仓位模式", options=["fixed_shares", "fixed_amount", "proportional"],
+            format_func=lambda x: {"fixed_shares": "固定股数", "fixed_amount": "固定金额", "proportional": "比例仓位"}.get(x, x))
+        if position_mode == "fixed_amount":
+            amount_per_grid = st.number_input("每格交易金额", value=1000.0, min_value=1.0, step=100.0, format="%.2f")
+        else:
+            amount_per_grid = 1000.0
 
-    show_quarterly = st.sidebar.checkbox("显示季频财务数据", value=False)
+        grid_step = (grid_upper - grid_lower) / (grid_number - 1) if grid_number > 1 else 0.0
+        st.text(f"网格价差: {grid_step:.4f}")
+        st.info("💡 购入价和网格中心自动从起始日收盘价获取")
+
+        use_atr_stop = st.checkbox("ATR 止损止盈", value=False)
+        if use_atr_stop:
+            atr_period = st.slider("ATR 周期", min_value=5, max_value=30, value=14)
+            atr_stop_mult = st.slider("止损乘数", min_value=0.5, max_value=5.0, value=1.5, step=0.1)
+            atr_tp_mult = st.slider("止盈乘数", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
+        else:
+            atr_period, atr_stop_mult, atr_tp_mult = 14, 1.5, 0.5
+
+    # ========== 高级设置 ==========
+    with st.sidebar.expander("⚙️ 高级设置", expanded=False):
+        commission_rate = st.number_input("佣金费率", value=0.0003, min_value=0.0, format="%.4f", help="默认0.03%最低5元")
+        transfer_fee_rate = st.number_input("过户费费率", value=0.00001, min_value=0.0, format="%.5f", help="沪市0.001%")
+        stamp_duty_rate = st.number_input("印花税费率", value=0.001, min_value=0.0, format="%.4f", help="卖出0.1%")
+        frequency = st.selectbox("K线频率", options=["5", "15", "30", "60", "d", "w", "m"], index=0,
+            format_func=lambda x: {"5": "5分钟", "15": "15分钟", "30": "30分钟", "60": "60分钟", "d": "日线", "w": "周线", "m": "月线"}.get(x, x))
+        adjustflag = st.selectbox("复权类型", options=["1", "2", "3"], index=2,
+            format_func=lambda x: {"1": "前复权", "2": "后复权", "3": "不复权"}.get(x, x))
+        show_quarterly = st.checkbox("季频财务数据", value=False)
 
     st.sidebar.write("")
-    run_button = st.sidebar.button("▶️ 运行网格交易回测", type="primary", width='stretch')
+    run_button = st.sidebar.button("▶️ 运行回测", type="primary", use_container_width=True)
 
-    # 构建配置对象
     config = GridTradingConfig(
         stock_code=stock_code,
         start_date=start_date.strftime("%Y-%m-%d"),
@@ -176,8 +135,15 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         grid_center=grid_center,
         shares_per_grid=shares_per_grid,
         initial_shares=initial_shares,
-        current_holding_price=current_holding_price,
         total_investment=total_investment,
+        auto_grid_range=auto_grid_range,
+        grid_range_atr_multiplier=grid_range_mult,
+        grid_spacing_mode=grid_spacing_mode,
+        strategy_mode=strategy_mode,
+        target_allocation=target_allocation,
+        rebalance_threshold=rebalance_threshold,
+        position_mode=position_mode,
+        amount_per_grid=amount_per_grid,
         commission_rate=commission_rate,
         transfer_fee_rate=transfer_fee_rate,
         stamp_duty_rate=stamp_duty_rate,
@@ -185,7 +151,6 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         frequency=frequency,
         adjustflag=adjustflag,
         show_quarterly_data=show_quarterly,
-        # ATR 参数（v0.3.0）
         use_atr_stop=use_atr_stop,
         atr_period=atr_period,
         atr_stop_multiplier=atr_stop_mult,
@@ -193,9 +158,6 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
     )
 
     return config, run_button
-
-
-# ========== 主界面渲染 ==========
 def main() -> None:
     """主函数：渲染 UI、执行回测、显示结果"""
 
@@ -247,11 +209,11 @@ def main() -> None:
 
     st.success(f"✅ 数据获取成功：共 {len(data)} 条 K 线记录")
 
-    # 计算 ATR（如果启用）
+    # 计算 ATR（如果启用止损止盈 或 自动网格范围需要）
     atr_series = None
-    if config.use_atr_stop:
+    if config.use_atr_stop or config.auto_grid_range:
         from src.gtap.atr import calculate_atr
-        with st.spinner("正在计算 ATR 动态止损止盈指标..."):
+        with st.spinner("正在计算 ATR 指标..."):
             try:
                 atr_series = calculate_atr(data, period=config.atr_period)
                 # 显示 ATR 统计
@@ -262,8 +224,11 @@ def main() -> None:
                     col2.metric("ATR 均值", f"{valid_atr.mean():.4f}")
                     col3.metric("ATR 最大值", f"{valid_atr.max():.4f}")
             except Exception as e:
-                st.warning(f"ATR 计算失败: {e}，将使用固定百分比止损")
+                st.warning(f"ATR 计算失败: {e}")
                 atr_series = None
+                if config.auto_grid_range:
+                    st.error("自动网格范围依赖 ATR，请关闭自动网格范围或确保数据包含 high/low/close 列")
+                    return
 
     # ========== 股票数据概览 ==========
     st.header("📊 股票历史 K 线数据")
@@ -333,6 +298,7 @@ def main() -> None:
         total_fees=result.total_fees,
         start_date=pd.Timestamp(config.start_date),
         end_date=pd.Timestamp(config.end_date),
+        trade_profits=result.trade_profits,  # P1-7
     )
 
     # 展示指标卡片

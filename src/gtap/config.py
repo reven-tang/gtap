@@ -5,7 +5,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Optional
 
 from .exceptions import ConfigError
 
@@ -25,11 +25,26 @@ class GridTradingConfig:
     grid_upper: float = 6.0
     grid_lower: float = 4.0
     grid_number: int = 10
-    grid_center: float = 5.0
+    grid_center: Optional[float] = None  # None = 自动（起始日收盘价）
     shares_per_grid: int = 100
     initial_shares: int = 100
-    current_holding_price: float = 5.0
     total_investment: float = 10000.0
+
+    # 网格范围自动计算（P0-3）
+    auto_grid_range: bool = False  # 是否基于 ATR 自动计算网格范围
+    grid_range_atr_multiplier: float = 2.0  # ATR × 此倍数 = 网格偏移量
+
+    # 策略模式（P1-4）
+    strategy_mode: Literal["grid", "rebalance_threshold", "rebalance_periodic"] = "grid"
+    target_allocation: float = 0.5  # 目标股票配置比例（再平衡模式核心参数）
+    rebalance_threshold: float = 0.05  # 偏离目标比例多少时触发再平衡
+
+    # 仓位管理模式（P1-5）
+    position_mode: Literal["fixed_shares", "fixed_amount", "proportional"] = "fixed_shares"
+    amount_per_grid: float = 1000.0  # fixed_amount 模式下每格交易金额
+
+    # 网格间距模式（P1-6）
+    grid_spacing_mode: Literal["arithmetic", "geometric"] = "arithmetic"
 
     # 交易费用（A股标准）
     commission_rate: float = 0.0003      # 佣金费率（默认 0.03%，最低 5 元）
@@ -60,7 +75,9 @@ class GridTradingConfig:
         if self.grid_number < 2:
             raise ConfigError("网格数量必须 ≥ 2")
 
-        if not (self.grid_lower <= self.grid_center <= self.grid_upper):
+        # grid_center=None 表示自动模式，不验证范围
+        # 只有手动设定时才验证
+        if self.grid_center is not None and not (self.grid_lower <= self.grid_center <= self.grid_upper):
             raise ConfigError("网格中心必须在上下限之间")
 
         if self.initial_shares < 0:
@@ -74,6 +91,17 @@ class GridTradingConfig:
 
         if self.stamp_duty_rate < 0:
             raise ConfigError("印花税费率不能为负")
+
+        if self.grid_range_atr_multiplier <= 0:
+            raise ConfigError("网格范围 ATR 乘数必须 > 0")
+
+        # P1 再平衡参数验证
+        if self.target_allocation < 0 or self.target_allocation > 1:
+            raise ConfigError("目标配置比例必须在 0-1 之间")
+        if self.rebalance_threshold < 0 or self.rebalance_threshold > 1:
+            raise ConfigError("再平衡阈值必须在 0-1 之间")
+        if self.amount_per_grid <= 0:
+            raise ConfigError("每格交易金额必须 > 0")
 
         # ATR 参数验证
         if self.atr_period < 2:
@@ -100,7 +128,6 @@ class GridTradingConfig:
             "grid_center": self.grid_center,
             "shares_per_grid": self.shares_per_grid,
             "initial_shares": self.initial_shares,
-            "current_holding_price": self.current_holding_price,
             "total_investment": self.total_investment,
             "commission_rate": self.commission_rate,
             "transfer_fee_rate": self.transfer_fee_rate,
@@ -109,6 +136,14 @@ class GridTradingConfig:
             "frequency": self.frequency,
             "adjustflag": self.adjustflag,
             "show_quarterly_data": self.show_quarterly_data,
+            "auto_grid_range": self.auto_grid_range,
+            "grid_range_atr_multiplier": self.grid_range_atr_multiplier,
+            "grid_spacing_mode": self.grid_spacing_mode,
+            "strategy_mode": self.strategy_mode,
+            "target_allocation": self.target_allocation,
+            "rebalance_threshold": self.rebalance_threshold,
+            "position_mode": self.position_mode,
+            "amount_per_grid": self.amount_per_grid,
             "use_atr_stop": self.use_atr_stop,
             "atr_period": self.atr_period,
             "atr_stop_multiplier": self.atr_stop_multiplier,
