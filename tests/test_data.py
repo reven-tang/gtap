@@ -1,4 +1,4 @@
-"""数据获取模块单元测试（骨架 + 关键逻辑验证）"""
+"""数据获取模块单元测试（v0.4.0 适配 Provider 抽象层）"""
 
 import pytest
 import pandas as pd
@@ -7,55 +7,93 @@ from src.gtap.data import get_stock_data, StockData
 from src.gtap.exceptions import DataFetchError
 
 
+def _make_mock_provider(kline_df=None, dividend_df=None, basic_df=None, normalize_code=None):
+    """构造 mock DataProvider"""
+    provider = MagicMock()
+    provider.fetch_kline.return_value = kline_df if kline_df is not None else pd.DataFrame()
+    provider.fetch_dividend.return_value = dividend_df if dividend_df is not None else pd.DataFrame()
+    provider.fetch_basic.return_value = basic_df if basic_df is not None else pd.DataFrame()
+    provider.normalize_code.return_value = normalize_code or "sh.600000"
+    return provider
+
+
+def _make_kline_df(datetime_index, open_price=10.0, high=10.5, low=9.8, close=10.2, volume=10000):
+    """构造 K 线 DataFrame"""
+    return pd.DataFrame({
+        "open": [open_price],
+        "high": [high],
+        "low": [low],
+        "close": [close],
+        "volume": [volume],
+    }, index=pd.DatetimeIndex([pd.Timestamp(datetime_index)]))
+
+
 class TestGetStockData:
-    """测试数据获取逻辑"""
+    """测试数据获取逻辑（Provider 抽象层）"""
 
-    @patch("src.gtap.data.bs")
-    def test_get_stock_data_returns_correct_type(self, mock_bs):
+    @patch("src.gtap.data.get_provider")
+    def test_get_stock_data_returns_correct_type(self, mock_get_provider):
         """测试返回 StockData NamedTuple 类型"""
-        # 构造 mock 返回值
-        mock_lg = MagicMock()
-        mock_lg.error_code = "0"
-        mock_lg.error_msg = ""
-
-        mock_rs = MagicMock()
-        mock_rs.error_code = "0"
-        mock_rs.fields = ["date", "time", "code", "open", "high", "low", "close", "volume"]
-        mock_rs.next.return_value = True
-        mock_rs.get_row_data.return_value = [
-            "2024-01-01", "09:35:00", "sh.601398", "5.0", "5.1", "4.9", "5.0", "1000"
-        ]
-
-        mock_bs.login.return_value = mock_lg
-        mock_bs.query_history_k_data_plus.return_value = mock_rs
-        mock_bs.query_dividend_data.return_value = mock_rs
-        mock_bs.query_stock_basic.return_value = mock_rs
-
-        # 其他查询返回空 DataFrame
-        for query_name in [
-            "query_profit_data", "query_operation_data", "query_growth_data",
-            "query_balance_data", "query_cash_flow_data", "query_dupont_data",
-            "query_performance_express_report", "query_forecast_report"
-        ]:
-            setattr(mock_bs, query_name, MagicMock(return_value=MagicMock(
-                error_code="0",
-                fields=[],
-                next=MagicMock(return_value=False),
-                get_row_data=MagicMock(return_value=[])
-            )))
-
-        mock_bs.logout.return_value = None
+        kline = _make_kline_df("2024-01-01 09:35:00")
+        provider = _make_mock_provider(kline_df=kline)
+        mock_get_provider.return_value = provider
 
         result = get_stock_data("sh.601398", "2024-01-01", "2024-01-02", show_quarterly=False)
 
         assert isinstance(result, StockData)
         assert isinstance(result.kline, pd.DataFrame)
+        assert not result.kline.empty
+        assert result.kline.iloc[0]["open"] == 10.0
+        provider.normalize_code.assert_called_once_with("sh.601398")
+        provider.fetch_kline.assert_called_once()
+
+    @patch("src.gtap.data.get_provider")
+    def test_get_stock_data_passes_parameters_to_provider(self, mock_get_provider):
+        """测试 data_source 参数正确传递给 factory"""
+        kline = _make_kline_df("2024-01-01")
+        provider = _make_mock_provider(kline_df=kline)
+        mock_get_provider.return_value = provider
+
+        result = get_stock_data(
+            "AAPL", "2024-01-01", "2024-01-31",
+            frequency="d", adjustflag="1", show_quarterly=False,
+            data_source="yfinance",
+        )
+
+        mock_get_provider.assert_called_once_with("yfinance")
+        provider.normalize_code.assert_called_once_with("AAPL")
+        provider.fetch_kline.assert_called_once_with(
+            code="sh.600000",
+            start_date="2024-01-01",
+            end_date="2024-01-31",
+            frequency="d",
+            adjustflag="1",
+        )
+        assert isinstance(result, StockData)
+        assert not result.kline.empty
+
+    @patch("src.gtap.data.get_provider")
+    def test_get_stock_data_returns_empty_dividend_when_not_supported(self, mock_get_provider):
+        """测试非 baostock 数据源的财务数据为空"""
+        kline = _make_kline_df("2024-01-01")
+        provider = _make_mock_provider(kline_df=kline)
+        mock_get_provider.return_value = provider
+
+        result = get_stock_data("AAPL", "2024-01-01", "2024-01-02",
+                                show_quarterly=True, data_source="yfinance")
+
+        assert result.profit.empty
+        assert result.operation.empty
+        assert result.growth.empty
+        assert result.balance.empty
+        assert result.cash_flow.empty
+        assert result.dupont.empty
+        assert result.performance_express.empty
+        assert result.forecast.empty
 
     def test_show_quarterly_false_returns_empty_dfs(self):
         """测试 show_quarterly=False 时空 DataFrame"""
-        # 这个测试依赖真实的 baostock 连接，仅用于手动验证
-        # 自动化测试需要完整 mock
-        pytest.skip("需要完整 mock baostock 接口")
+        pytest.skip("需要完整 mock Provider 接口")
 
     def test_data_module_exports(self):
         """验证数据模块导出正确"""
@@ -63,74 +101,59 @@ class TestGetStockData:
         assert hasattr(data_module, "get_stock_data")
         assert hasattr(data_module, "StockData")
 
-    @patch("src.gtap.data.bs")
-    def test_datetime_parsing_for_daily_frequency(self, mock_bs):
-        """测试日线频率的日期解析 (time 为 8 位日期格式)"""
-        mock_lg = MagicMock()
-        mock_lg.error_code = "0"
-        mock_lg.error_msg = ""
+    @patch("src.gtap.data.get_provider")
+    def test_datetime_parsing_for_daily_frequency(self, mock_get_provider):
+        """测试日线频率的 datetime 正确处理"""
+        kline = _make_kline_df("2025-01-02 00:00:00")
+        provider = _make_mock_provider(kline_df=kline)
+        mock_get_provider.return_value = provider
 
-        # K线数据 mock
-        mock_rs = MagicMock()
-        mock_rs.error_code = "0"
-        mock_rs.fields = ["date", "time", "code", "open", "high", "low", "close", "volume"]
-        mock_rs.next.side_effect = [True, False]  # 第一行为 True，然后 False 终止循环
-        mock_rs.get_row_data.return_value = [
-            "2025-01-02", "20250102", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"
-        ]
-
-        mock_bs.login.return_value = mock_lg
-        mock_bs.query_history_k_data_plus.return_value = mock_rs
-
-        # 其他查询返回空
-        mock_empty = MagicMock()
-        mock_empty.error_code = "0"
-        mock_empty.fields = []
-        mock_empty.next.return_value = False
-        mock_empty.get_row_data.return_value = []
-        mock_bs.query_dividend_data.return_value = mock_empty
-        mock_bs.query_stock_basic.return_value = mock_empty
-        mock_bs.logout.return_value = None
-
-        result = get_stock_data("sh.600000", "2025-01-02", "2025-01-02", frequency="d", show_quarterly=False)
+        result = get_stock_data("sh.600000", "2025-01-02", "2025-01-02",
+                                frequency="d", show_quarterly=False)
 
         assert not result.kline.empty
         assert isinstance(result.kline.index, pd.DatetimeIndex)
         assert result.kline.index[0] == pd.Timestamp("2025-01-02 00:00:00")
 
-    @patch("src.gtap.data.bs")
-    def test_datetime_parsing_for_minute_frequency(self, mock_bs):
-        """测试分钟线频率的日期解析 (time 为时间格式)"""
-        mock_lg = MagicMock()
-        mock_lg.error_code = "0"
-        mock_lg.error_msg = ""
+    @patch("src.gtap.data.get_provider")
+    def test_datetime_parsing_for_minute_frequency(self, mock_get_provider):
+        """测试分钟线频率的 datetime 正确处理"""
+        kline = pd.DataFrame({
+            "open": [10.0, 10.2],
+            "high": [10.5, 10.8],
+            "low": [9.8, 10.1],
+            "close": [10.2, 10.5],
+            "volume": [10000, 8000],
+        }, index=pd.DatetimeIndex([
+            pd.Timestamp("2025-01-02 09:35:00"),
+            pd.Timestamp("2025-01-02 09:40:00"),
+        ]))
 
-        # K线数据 mock (2 行分钟线)
-        mock_rs = MagicMock()
-        mock_rs.error_code = "0"
-        mock_rs.fields = ["date", "time", "code", "open", "high", "low", "close", "volume"]
-        mock_rs.next.side_effect = [True, True, False]
-        mock_rs.get_row_data.side_effect = [
-            ["2025-01-02", "09:35:00", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"],
-            ["2025-01-02", "09:40:00", "sh.600000", "10.2", "10.8", "10.1", "10.5", "8000"],
-        ]
+        provider = _make_mock_provider(kline_df=kline)
+        mock_get_provider.return_value = provider
 
-        mock_bs.login.return_value = mock_lg
-        mock_bs.query_history_k_data_plus.return_value = mock_rs
-
-        # 其他查询返回空
-        mock_empty = MagicMock()
-        mock_empty.error_code = "0"
-        mock_empty.fields = []
-        mock_empty.next.return_value = False
-        mock_empty.get_row_data.return_value = []
-        mock_bs.query_dividend_data.return_value = mock_empty
-        mock_bs.query_stock_basic.return_value = mock_empty
-        mock_bs.logout.return_value = None
-
-        result = get_stock_data("sh.600000", "2025-01-02", "2025-01-02", frequency="5", show_quarterly=False)
+        result = get_stock_data("sh.600000", "2025-01-02", "2025-01-02",
+                                frequency="5", show_quarterly=False)
 
         assert len(result.kline) == 2
         assert isinstance(result.kline.index, pd.DatetimeIndex)
         assert result.kline.index[0] == pd.Timestamp("2025-01-02 09:35:00")
         assert result.kline.index[1] == pd.Timestamp("2025-01-02 09:40:00")
+
+    @patch("src.gtap.data.get_provider")
+    def test_raises_data_fetch_error_on_provider_failure(self, mock_get_provider):
+        """测试 Provider 失败时抛出 DataFetchError"""
+        mock_get_provider.side_effect = DataFetchError("Provider not available")
+
+        with pytest.raises(DataFetchError, match="Provider not available"):
+            get_stock_data("sh.600000", "2025-01-02", "2025-01-02")
+
+    @patch("src.gtap.data.get_provider")
+    def test_raises_data_fetch_error_on_kline_failure(self, mock_get_provider):
+        """测试 K 线获取失败时抛出 DataFetchError"""
+        provider = _make_mock_provider()
+        provider.fetch_kline.side_effect = RuntimeError("Network error")
+        mock_get_provider.return_value = provider
+
+        with pytest.raises(DataFetchError, match="数据获取失败"):
+            get_stock_data("sh.600000", "2025-01-02", "2025-01-02")
