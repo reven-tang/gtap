@@ -70,7 +70,6 @@ def calculate_metrics(
     values = np.array(asset_values, dtype=float)
 
     # ---------- 基础参数 ----------
-    initial_investment = values[0]  # 资产序列首值为初始投资
     total_investment = values[0]    # 总投入等于初始投资（无追加）
 
     # ---------- 基础收益指标 ----------
@@ -147,9 +146,7 @@ def calculate_metrics(
     stop_loss_rate = stop_loss_count / total_trades if total_trades > 0 else 0.0
     take_profit_rate = take_profit_count / total_trades if total_trades > 0 else 0.0
 
-    # 平均入场 ATR 值（仅统计有 ATR 记录的入场交易）
-    atr_values = [getattr(t, "atr_value", 0.0) for t in trades if getattr(t, "atr_value", 0.0) > 0]
-    avg_atr_at_entry = float(np.mean(atr_values)) if atr_values else 0.0
+
 
     return PerformanceMetrics(
         total_return=round(profit_pct, 2),

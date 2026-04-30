@@ -26,15 +26,15 @@ except ImportError:
 
 
 # 已注册的数据源映射
-_PROVIDER_MAP = {
+_PROVIDER_MAP: dict[str, type[DataProvider]] = {
     "baostock": BaoStockProvider,
 }
 
 if _YFinanceProvider is not None:
-    _PROVIDER_MAP["yfinance"] = _YFinanceProvider
+    _PROVIDER_MAP["yfinance"] = _YFinanceProvider  # type: ignore[assignment]
 
 if _AkShareProvider is not None:
-    _PROVIDER_MAP["akshare"] = _AkShareProvider
+    _PROVIDER_MAP["akshare"] = _AkShareProvider  # type: ignore[assignment]
 
 
 def get_provider(source: str = "baostock") -> DataProvider:

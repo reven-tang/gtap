@@ -6,7 +6,7 @@ YFinance 数据源提供商 - GTAP 网格交易回测平台
 """
 
 import pandas as pd
-from typing import List, Optional
+from typing import List
 
 from .base import DataProvider
 from ..exceptions import DataFetchError

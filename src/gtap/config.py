@@ -4,7 +4,7 @@
 提供配置类、默认参数和参数验证功能。
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 from .exceptions import ConfigError

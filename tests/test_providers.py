@@ -6,6 +6,8 @@
 """
 
 import pytest
+import pandas as pd
+from unittest.mock import MagicMock
 from src.gtap.providers.factory import get_provider, available_providers
 from src.gtap.providers.baostock_provider import BaoStockProvider
 from src.gtap.providers.base import DataProvider
@@ -137,3 +139,123 @@ class TestDataProviderInterface:
         provider = BaoStockProvider()
         assert provider.supports_frequency("1") is False
         assert provider.supports_frequency("2h") is False
+
+
+class TestBaoStockProviderWithMock:
+    """BaoStock Provider 方法测试（mock baostock API）"""
+
+    @pytest.fixture
+    def mock_bs(self):
+        """创建 mock baostock 模块"""
+        mock = MagicMock()
+        mock.login.return_value = MagicMock(error_code="0", error_msg="")
+        mock.logout.return_value = None
+        return mock
+
+    def test_fetch_kline_returns_dataframe(self, mock_bs):
+        """测试 fetch_kline 返回 DataFrame"""
+        mock_rs = MagicMock()
+        mock_rs.error_code = "0"
+        mock_rs.fields = ["date", "code", "open", "high", "low", "close", "volume"]
+        mock_rs.next.return_value = True
+        mock_rs.get_row_data.return_value = ["2024-01-01", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"]
+        mock_bs.query_history_k_data_plus.return_value = mock_rs
+
+        # 替换模块级别的 bs 引用
+        import src.gtap.providers.baostock_provider as bsp
+        original_bs = bsp.bs
+        bsp.bs = mock_bs
+        try:
+            provider = BaoStockProvider()
+            result = provider.fetch_kline("sh.600000", "2024-01-01", "2024-12-31")
+
+            assert isinstance(result, pd.DataFrame)
+            assert "open" in result.columns
+            assert "close" in result.columns
+        finally:
+            bsp.bs = original_bs
+
+    def test_fetch_kline_with_frequency(self, mock_bs):
+        """测试不同频率的 K 线获取"""
+        mock_rs = MagicMock()
+        mock_rs.error_code = "0"
+        mock_rs.fields = ["date", "time", "code", "open", "high", "low", "close", "volume"]
+        mock_rs.next.return_value = True
+        mock_rs.get_row_data.return_value = ["2024-01-02", "09:35:00", "sh.600000", "10.0", "10.5", "9.8", "10.2", "10000"]
+        mock_bs.query_history_k_data_plus.return_value = mock_rs
+
+        import src.gtap.providers.baostock_provider as bsp
+        original_bs = bsp.bs
+        bsp.bs = mock_bs
+        try:
+            provider = BaoStockProvider()
+            result = provider.fetch_kline("sh.600000", "2024-01-01", "2024-12-31", frequency="5")
+            assert isinstance(result, pd.DataFrame)
+        finally:
+            bsp.bs = original_bs
+
+    def test_fetch_dividend_returns_dataframe(self, mock_bs):
+        """测试 fetch_dividend 返回 DataFrame"""
+        mock_rs = MagicMock()
+        mock_rs.error_code = "0"
+        mock_rs.fields = ["code", "dividend_plan_date", "dividend_type"]
+        mock_rs.next.return_value = False
+        mock_bs.query_dividend_data.return_value = mock_rs
+
+        import src.gtap.providers.baostock_provider as bsp
+        original_bs = bsp.bs
+        bsp.bs = mock_bs
+        try:
+            provider = BaoStockProvider()
+            result = provider.fetch_dividend("sh.600000")
+            assert isinstance(result, pd.DataFrame)
+        finally:
+            bsp.bs = original_bs
+
+    def test_fetch_basic_returns_dataframe(self, mock_bs):
+        """测试 fetch_basic 返回 DataFrame"""
+        mock_rs = MagicMock()
+        mock_rs.error_code = "0"
+        mock_rs.fields = ["code", "code_name", "ipoDate", "industry"]
+        mock_rs.next.return_value = True
+        mock_rs.get_row_data.return_value = ["sh.600000", "浦发银行", "2000-01-01", "金融"]
+        mock_bs.query_stock_basic.return_value = mock_rs
+
+        import src.gtap.providers.baostock_provider as bsp
+        original_bs = bsp.bs
+        bsp.bs = mock_bs
+        try:
+            provider = BaoStockProvider()
+            result = provider.fetch_basic("sh.600000")
+            assert isinstance(result, pd.DataFrame)
+            assert "stock_name" in result.columns
+        finally:
+            bsp.bs = original_bs
+
+
+class TestDataProviderEdgeCases:
+    """Provider 边界条件测试"""
+
+    def test_base_provider_default_implementations(self):
+        """测试基类的默认实现"""
+        from src.gtap.providers.akshare_provider import AkShareProvider
+        from src.gtap.providers.yfinance_provider import YFinanceProvider
+
+        # 这些可选 Provider 若已导入，验证它们的 normalize_code 方法
+        try:
+            import akshare
+            p = AkShareProvider()
+            assert callable(p.normalize_code)
+            assert callable(p.fetch_kline)
+            assert callable(p.fetch_dividend)
+        except ImportError:
+            pass
+
+        try:
+            import yfinance
+            p = YFinanceProvider()
+            assert callable(p.normalize_code)
+            assert callable(p.fetch_kline)
+            assert callable(p.fetch_dividend)
+        except ImportError:
+            pass

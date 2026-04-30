@@ -5,7 +5,7 @@
 通过 DataProvider 抽象层实现数据源切换。
 """
 
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 import pandas as pd
 from .exceptions import DataFetchError
 from .providers.factory import get_provider
@@ -91,7 +91,7 @@ def get_stock_data(
         if show_quarterly and data_source == "baostock":
             # 季频财务数据仅 baostock 支持
             import baostock as bs
-            lg = bs.login()
+            bs.login()
             year = start_date[:4]
 
             def _fetch_baostock_table(query_fn, code, year, quarter="1"):

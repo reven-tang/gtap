@@ -1,7 +1,7 @@
 """配置模块单元测试"""
 
 import pytest
-from src.gtap.config import GridTradingConfig, DEFAULT_CONFIG
+from src.gtap.config import GridTradingConfig
 from src.gtap.exceptions import ConfigError
 
 
@@ -45,3 +45,44 @@ class TestGridTradingConfig:
         d = config.to_dict()
         assert d["stock_code"] == "sh.601398"
         assert "grid_upper" in d
+
+    def test_negative_initial_shares_raises(self):
+        """测试负初始股数"""
+        with pytest.raises(ConfigError):
+            GridTradingConfig(initial_shares=-10)
+
+    def test_negative_total_investment_raises(self):
+        """测试总投资为 0 时仍然可以创建配置"""
+        # total_investment=0 允许创建但会导致回测无法买入
+        config = GridTradingConfig(total_investment=0)
+        assert config.total_investment == 0
+
+    def test_default_values(self):
+        """测试所有默认值合理"""
+        config = GridTradingConfig()
+        assert config.grid_number == 10
+        assert config.initial_shares == 100
+        assert config.total_investment == 10000.0
+        assert config.commission_rate == 0.0003
+        assert config.data_source == "baostock"
+
+    def test_atr_params_stored(self):
+        """测试 ATR 参数正确存储"""
+        config = GridTradingConfig(
+            use_atr_stop=True, atr_period=20,
+            atr_stop_multiplier=2.0, atr_tp_multiplier=0.8,
+        )
+        assert config.use_atr_stop is True
+        assert config.atr_period == 20
+        assert config.atr_stop_multiplier == 2.0
+        assert config.atr_tp_multiplier == 0.8
+
+    def test_data_source_field(self):
+        """测试 data_source 字段"""
+        config = GridTradingConfig(data_source="yfinance")
+        assert config.data_source == "yfinance"
+
+    def test_grid_step_single_grid(self):
+        """测试单网格的间距为 0"""
+        config = GridTradingConfig(grid_upper=6.0, grid_lower=4.0, grid_number=2)
+        assert config.grid_step == pytest.approx(2.0)

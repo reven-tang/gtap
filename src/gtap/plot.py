@@ -8,11 +8,9 @@ from typing import TYPE_CHECKING, Optional
 import plotly.graph_objects as go
 import mplfinance as mpf
 import pandas as pd
-import matplotlib.pyplot as plt
 
 if TYPE_CHECKING:
-    from .data import StockData
-    from .grid import GridTradingResult, Trade
+    pass
 
 
 def plot_kline(

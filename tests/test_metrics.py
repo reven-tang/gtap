@@ -1,10 +1,8 @@
 """绩效指标计算模块单元测试"""
 
 import pytest
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
-from src.gtap.metrics import calculate_metrics, calculate_trade_metrics, PerformanceMetrics
+from src.gtap.metrics import calculate_metrics, calculate_trade_metrics
 
 
 class TestCalculateMetrics:
@@ -17,8 +15,6 @@ class TestCalculateMetrics:
         dates = [start + timedelta(days=i) for i in range(30)]
         values = [10000 * (1.01**i) for i in range(30)]
         trades = []  # 无交易
-        initial = 10000.0
-        total_invest = 10000.0
         fees = 0.0
 
         metrics = calculate_metrics(
@@ -42,8 +38,6 @@ class TestCalculateMetrics:
             calculate_metrics(
                 asset_values=[],
                 trades=[],
-                initial_investment=10000,
-                total_investment=10000,
                 total_fees=0,
                 start_date=datetime(2024, 1, 1),
                 end_date=datetime(2024, 1, 2),
@@ -60,6 +54,57 @@ class TestCalculateMetrics:
                 start_date=datetime(2024, 1, 2),
                 end_date=datetime(2024, 1, 1),
             )
+
+    def test_zero_day_range_raises(self):
+        """测试同日期的范围应抛出异常"""
+        values = [10000, 10100]
+        start = datetime(2024, 1, 1)
+        with pytest.raises(Exception):
+            calculate_metrics(
+                asset_values=values,
+                trades=[],
+                total_fees=0,
+                start_date=start,
+                end_date=start,
+            )
+
+    def test_metrics_with_atr_trades(self):
+        """测试包含 ATR 交易的指标计算"""
+        from src.gtap.grid import Trade
+        start = datetime(2024, 1, 1)
+        dates = [start + timedelta(days=i) for i in range(30)]
+        values = [10000 + 100 * i for i in range(30)]
+
+        # 构造包含 ATR 止损/止盈的交易记录
+        TradeType = Trade(
+            action="", timestamp=start, price=0.0, shares=0,
+            total_shares=0, commission=0.0, transfer_fee=0.0,
+            stamp_duty=0.0, total_fee=0.0, avg_price=0.0,
+        ).__class__
+
+        trades = [
+            Trade(action="买入", timestamp=start, price=100.0, shares=100,
+                  total_shares=100, commission=3.0, transfer_fee=0.1, stamp_duty=0.0,
+                  total_fee=3.1, avg_price=100.0,
+                  atr_value=2.0, stop_loss_price=97.0, take_profit_price=101.0, exit_reason="grid"),
+            Trade(action="卖出", timestamp=start + timedelta(days=5), price=95.0, shares=100,
+                  total_shares=0, commission=2.85, transfer_fee=0.1, stamp_duty=9.5,
+                  total_fee=12.45, avg_price=100.0,
+                  atr_value=2.5, stop_loss_price=96.0, take_profit_price=101.0, exit_reason="stop_loss"),
+        ]
+
+        metrics = calculate_metrics(
+            asset_values=values,
+            trades=trades,
+            total_fees=15.55,
+            start_date=start,
+            end_date=dates[-1],
+        )
+
+        assert "stop_loss_count" in metrics
+        assert "take_profit_count" in metrics
+        assert "stop_loss_rate" in metrics
+        assert "take_profit_rate" in metrics
 
 
 class TestCalculateTradeMetrics:

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-04-30
+
+### Added 新增
+- ✅ ruff lint 集成（代码风格检查）
+- ✅ mypy type check（类型检查通过）
+- ✅ pytest-cov 覆盖率报告
+- ✅ 新增测试 17 个（总计 70 个）
+  - 网格交易集成测试（ATR 止损/止盈、多网格跨越、资金不足等边界）
+  - 配置边界测试（ATR 参数、数据源字段）
+  - 指标计算测试（ATR 交易统计）
+
+### Changed 变更
+- 🔄 代码风格统一（ruff auto-fix）
+- 🔄 类型标注完善（mypy 0 errors）
+
+### Fixed 修复
+- 🔧 移除未使用变量（`initial_investment`, `avg_atr_at_entry`, `lg`）
+- 🔧 `__init__.py` 添加 `available_providers` 到 `__all__`
+
+### Stats 统计
+- 测试通过率: 69/70 (98.6%)
+- 代码覆盖率: 65% (核心模块 90%+)
+- ruff: 0 errors
+- mypy: 0 errors
+
+---
+
 ## [0.4.0] — 2026-04-30
 
 ### Added 新增

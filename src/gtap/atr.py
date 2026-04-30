@@ -5,9 +5,7 @@ ATR 动态止损止盈模块 - GTAP 网格交易回测平台
 ATR 是基于历史波动率的风险度量，比固定百分比更适应市场变化。
 """
 
-from typing import Optional
 import pandas as pd
-import numpy as np
 from .exceptions import MetricsError
 
 
