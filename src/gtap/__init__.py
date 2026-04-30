@@ -29,7 +29,7 @@ from .exceptions import (
     MetricsError,
     PlotError,
 )
-from .atr import calculate_atr, get_atr_stop_levels
+from .atr import calculate_atr, get_atr_stop_levels, is_atr_stop_triggered
 from .strategies import StrategyEngine, TradeSignal, GridStrategy, RebalanceStrategy, create_strategy
 from .portfolio import PortfolioAssetConfig, PortfolioConfig, PortfolioResult, portfolio_backtest, PortfolioError
 from .parrondo import ParrondoConfig, ParrondoRound, ParrondoResult, parrondo_simulate, parrondo_grid_analysis
@@ -61,6 +61,7 @@ __all__ = [
     # atr
     "calculate_atr",
     "get_atr_stop_levels",
+    "is_atr_stop_triggered",
     # strategies
     "StrategyEngine",
     "TradeSignal",

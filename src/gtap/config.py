@@ -95,6 +95,9 @@ class GridTradingConfig:
         if self.grid_range_atr_multiplier <= 0:
             raise ConfigError("网格范围 ATR 乘数必须 > 0")
 
+        if self.total_investment <= 0:
+            raise ConfigError("投入总资金必须 > 0")
+
         # P1 再平衡参数验证
         if self.target_allocation < 0 or self.target_allocation > 1:
             raise ConfigError("目标配置比例必须在 0-1 之间")
@@ -110,6 +113,14 @@ class GridTradingConfig:
             raise ConfigError("ATR 止损乘数必须 > 0")
         if self.atr_tp_multiplier < 0:
             raise ConfigError("ATR 止盈乘数必须 ≥ 0")
+
+        # 策略与模式验证
+        if self.strategy_mode not in ("grid", "rebalance_threshold", "rebalance_periodic"):
+            raise ConfigError(f"未知策略模式: {self.strategy_mode}")
+        if self.position_mode not in ("fixed_shares", "fixed_amount", "proportional"):
+            raise ConfigError(f"未知仓位模式: {self.position_mode}")
+        if self.grid_spacing_mode not in ("arithmetic", "geometric"):
+            raise ConfigError(f"未知网格间距模式: {self.grid_spacing_mode}")
 
     @property
     def grid_step(self) -> float:

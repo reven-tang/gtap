@@ -116,9 +116,10 @@ class TestCreateStrategy:
         assert isinstance(strategy, RebalanceStrategy)
 
     def test_invalid_mode_raises(self):
-        config = GridTradingConfig(strategy_mode="invalid")
-        with pytest.raises(ValueError):
-            create_strategy(config, [4.0, 5.0, 6.0])
+        # strategy_mode invalid now caught at config level
+        from src.gtap.exceptions import ConfigError
+        with pytest.raises(ConfigError, match="未知策略模式"):
+            GridTradingConfig(strategy_mode="invalid")
 
     def test_strategy_has_name(self):
         config = GridTradingConfig(strategy_mode="grid")

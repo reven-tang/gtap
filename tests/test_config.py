@@ -52,10 +52,9 @@ class TestGridTradingConfig:
             GridTradingConfig(initial_shares=-10)
 
     def test_negative_total_investment_raises(self):
-        """测试总投资为 0 时仍然可以创建配置"""
-        # total_investment=0 允许创建但会导致回测无法买入
-        config = GridTradingConfig(total_investment=0)
-        assert config.total_investment == 0
+        """测试总投资为 0 时抛出 ConfigError"""
+        with pytest.raises(ConfigError, match="投入总资金"):
+            GridTradingConfig(total_investment=0)
 
     def test_default_values(self):
         """测试所有默认值合理"""
