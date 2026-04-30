@@ -1,29 +1,28 @@
 """
 GTAP 网格交易回测平台 - Streamlit 应用入口
 
-重构后版本：v0.2.0
-模块化架构：config + data + fees + grid + metrics + plot
+v0.6.0+: DuckDB 本地数据仓库 + 增量更新 + 自动降采样 + 进度反馈
 """
 
 import streamlit as st
 from datetime import date
-from typing import Tuple
+from typing import Tuple, Optional
 
-# 从 src.gtap 导入重构后的模块
 from src.gtap import (
     GridTradingConfig,
     get_stock_data,
     grid_trading,
     calculate_metrics,
-    calculate_trade_metrics,
     plot_kline,
     plot_asset_curve,
-    plot_grid_lines,
     DataFetchError,
     GridTradingError,
 )
+from src.gtap.data import auto_frequency, get_data_overview
+from src.gtap.store import get_store
+from src.gtap.atr import calculate_atr
+from src.gtap.providers.factory import available_providers
 import pandas as pd
-import plotly.graph_objects as go
 
 
 # ========== Streamlit 页面配置 ==========
@@ -37,93 +36,156 @@ st.set_page_config(
 
 # ========== 侧边栏参数配置 ==========
 def sidebar_config() -> Tuple[GridTradingConfig, bool]:
-    """渲染侧边栏并返回配置对象 + 运行按钮状态
-
-    P2-8: 按用户意图分组（基础/策略/高级）
-    """
+    """渲染侧边栏并返回配置对象 + 运行按钮状态"""
 
     st.sidebar.title("📈 GTAP 回测平台")
 
     # ========== 基础设置 ==========
     with st.sidebar.expander("🎯 基础设置", expanded=True):
-        stock_code = st.text_input("股票代码", value="sh.601398", help="沪市sh.601398；深市sz.000001")
+        stock_code = st.text_input("股票代码", value="sh.601398",
+            help="沪市sh.601398；深市sz.000001")
         col_d1, col_d2 = st.columns(2)
         with col_d1:
             start_date = st.date_input("开始日期", value=date(2024, 1, 1))
         with col_d2:
             end_date = st.date_input("结束日期", value=date(2024, 12, 31))
-        total_investment = st.number_input("投入总资金", value=10000.0, min_value=0.0, step=100.0, format="%.2f")
+        total_investment = st.number_input("投入总资金", value=10000.0,
+            min_value=0.0, step=100.0, format="%.2f")
         initial_shares = st.number_input("初次买入股数", value=100, min_value=1, step=1)
         shares_per_grid = st.number_input("每格交易股数", value=100, min_value=1, step=1)
 
-        from src.gtap.providers.factory import available_providers
         available = available_providers()
         data_source = st.selectbox("数据源", options=available, index=0,
-            format_func=lambda x: {"baostock": "BaoStock (A股免费)", "yfinance": "YFinance (港美股)", "akshare": "AkShare (A股增强)"}.get(x, x))
-        code_hint = {"baostock": "沪市：sh.601398；深市：sz.000001", "yfinance": "A股：601398.SS / 美股：AAPL / 港股：0700.HK", "akshare": "纯数字：601398 / 000001"}.get(data_source, "请输入股票代码")
+            format_func=lambda x: {"baostock": "BaoStock (A股免费)",
+                                   "yfinance": "YFinance (港美股)",
+                                   "akshare": "AkShare (A股增强)"}.get(x, x))
         if data_source != "baostock":
-            st.info(f"💡 {data_source} 代码格式: {code_hint}")
+            hint = {"yfinance": "A股：601398.SS / 美股：AAPL",
+                    "akshare": "纯数字：601398 / 000001"}.get(data_source, "")
+            if hint:
+                st.info(f"💡 代码格式: {hint}")
 
     # ========== 交易策略 ==========
     with st.sidebar.expander("📊 交易策略", expanded=True):
-        auto_grid_range = st.checkbox("自动网格范围", value=False, help="基于 ATR 自动计算上下限")
+        auto_grid_range = st.checkbox("自动网格范围", value=False,
+            help="基于 ATR 自动计算上下限")
         if auto_grid_range:
-            grid_range_mult = st.slider("ATR 乘数", min_value=0.5, max_value=5.0, value=2.0, step=0.1, format="%.1f")
-            grid_upper = st.number_input("网格上限", value=6.0, step=0.01, format="%.2f", disabled=True)
-            grid_lower = st.number_input("网格下限", value=4.0, step=0.01, format="%.2f", disabled=True)
+            grid_range_mult = st.slider("ATR 乘数", min_value=0.5, max_value=5.0,
+                value=2.0, step=0.1, format="%.1f")
+            grid_upper = st.number_input("网格上限", value=6.0, step=0.01,
+                format="%.2f", disabled=True)
+            grid_lower = st.number_input("网格下限", value=4.0, step=0.01,
+                format="%.2f", disabled=True)
         else:
             grid_range_mult = 2.0
             grid_upper = st.number_input("网格上限", value=6.0, step=0.01, format="%.2f")
             grid_lower = st.number_input("网格下限", value=4.0, step=0.01, format="%.2f")
 
         grid_number = st.number_input("网格数量", value=10, min_value=2, step=1)
-        grid_center_manual = st.checkbox("手动设定网格中心", value=False, help="默认=起始日收盘价")
-        grid_center = st.number_input("网格中心", value=5.0, step=0.01, format="%.2f", disabled=not grid_center_manual) if grid_center_manual else None
+        grid_center_manual = st.checkbox("手动设定网格中心",
+            value=False, help="默认=起始日收盘价")
+        grid_center = (st.number_input("网格中心", value=5.0, step=0.01, format="%.2f")
+                       if grid_center_manual else None)
 
-        grid_spacing_mode = st.selectbox("网格间距", options=["arithmetic", "geometric"],
-            format_func=lambda x: {"arithmetic": "等差间距", "geometric": "等比间距"}.get(x, x))
+        grid_spacing_mode = st.selectbox("网格间距",
+            options=["arithmetic", "geometric"],
+            format_func=lambda x: {"arithmetic": "等差间距",
+                                   "geometric": "等比间距"}.get(x, x))
 
-        strategy_mode = st.selectbox("策略模式", options=["grid", "rebalance_threshold", "rebalance_periodic"],
-            format_func=lambda x: {"grid": "经典网格", "rebalance_threshold": "阈值再平衡", "rebalance_periodic": "周期再平衡"}.get(x, x))
-        if strategy_mode in ("rebalance_threshold", "rebalance_periodic"):
-            target_allocation = st.slider("目标股票比例", min_value=0.1, max_value=0.9, value=0.5, step=0.05, format_func=lambda x: f"{x*100:.0f}%")
-            rebalance_threshold = st.slider("再平衡阈值", min_value=0.01, max_value=0.20, value=0.05, step=0.01, format_func=lambda x: f"{x*100:.0f}%")
+        strategy_mode = st.selectbox("策略模式",
+            options=["grid", "rebalance_threshold", "rebalance_periodic"],
+            format_func=lambda x: {"grid": "经典网格",
+                                   "rebalance_threshold": "阈值再平衡",
+                                   "rebalance_periodic": "周期再平衡"}.get(x, x))
+
+        if "rebalance" in strategy_mode:
+            target_allocation = st.slider("目标股票比例", min_value=0.1,
+                max_value=0.9, value=0.5, step=0.05,
+                format_func=lambda x: f"{x*100:.0f}%")
+            rebalance_threshold = st.slider("再平衡阈值", min_value=0.01,
+                max_value=0.20, value=0.05, step=0.01,
+                format_func=lambda x: f"{x*100:.0f}%")
         else:
             target_allocation = 0.5
             rebalance_threshold = 0.05
 
-        position_mode = st.selectbox("仓位模式", options=["fixed_shares", "fixed_amount", "proportional"],
-            format_func=lambda x: {"fixed_shares": "固定股数", "fixed_amount": "固定金额", "proportional": "比例仓位"}.get(x, x))
+        position_mode = st.selectbox("仓位模式",
+            options=["fixed_shares", "fixed_amount", "proportional"],
+            format_func=lambda x: {"fixed_shares": "固定股数",
+                                   "fixed_amount": "固定金额",
+                                   "proportional": "比例仓位"}.get(x, x))
         if position_mode == "fixed_amount":
-            amount_per_grid = st.number_input("每格交易金额", value=1000.0, min_value=1.0, step=100.0, format="%.2f")
+            amount_per_grid = st.number_input("每格交易金额", value=1000.0,
+                min_value=1.0, step=100.0, format="%.2f")
         else:
             amount_per_grid = 1000.0
-
-        grid_step = (grid_upper - grid_lower) / (grid_number - 1) if grid_number > 1 else 0.0
-        st.text(f"网格价差: {grid_step:.4f}")
-        st.info("💡 购入价和网格中心自动从起始日收盘价获取")
 
         use_atr_stop = st.checkbox("ATR 止损止盈", value=False)
         if use_atr_stop:
             atr_period = st.slider("ATR 周期", min_value=5, max_value=30, value=14)
-            atr_stop_mult = st.slider("止损乘数", min_value=0.5, max_value=5.0, value=1.5, step=0.1)
-            atr_tp_mult = st.slider("止盈乘数", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
+            atr_stop_mult = st.slider("止损乘数", min_value=0.5, max_value=5.0,
+                value=1.5, step=0.1)
+            atr_tp_mult = st.slider("止盈乘数", min_value=0.0, max_value=2.0,
+                value=0.5, step=0.1)
         else:
             atr_period, atr_stop_mult, atr_tp_mult = 14, 1.5, 0.5
 
     # ========== 高级设置 ==========
     with st.sidebar.expander("⚙️ 高级设置", expanded=False):
-        commission_rate = st.number_input("佣金费率", value=0.0003, min_value=0.0, format="%.4f", help="默认0.03%最低5元")
-        transfer_fee_rate = st.number_input("过户费费率", value=0.00001, min_value=0.0, format="%.5f", help="沪市0.001%")
-        stamp_duty_rate = st.number_input("印花税费率", value=0.001, min_value=0.0, format="%.4f", help="卖出0.1%")
-        frequency = st.selectbox("K线频率", options=["5", "15", "30", "60", "d", "w", "m"], index=0,
-            format_func=lambda x: {"5": "5分钟", "15": "15分钟", "30": "30分钟", "60": "60分钟", "d": "日线", "w": "周线", "m": "月线"}.get(x, x))
+        commission_rate = st.number_input("佣金费率", value=0.0003,
+            min_value=0.0, format="%.4f", help="默认0.03%最低5元")
+        transfer_fee_rate = st.number_input("过户费费率", value=0.00001,
+            min_value=0.0, format="%.5f", help="沪市0.001%")
+        stamp_duty_rate = st.number_input("印花税费率", value=0.001,
+            min_value=0.0, format="%.4f", help="卖出0.1%")
+
+        # P1: 自动降采样
+        auto_freq = st.checkbox("自动推荐频率", value=True,
+            help="根据时间跨度自动选择最佳 K 线频率")
+
+        if auto_freq:
+            recommended = auto_frequency(
+                start_date.strftime("%Y-%m-%d"),
+                end_date.strftime("%Y-%m-%d"),
+            )
+            frequency = st.selectbox("K线频率",
+                options=["5", "15", "30", "60", "d", "w", "m"],
+                index=["5", "15", "30", "60", "d", "w", "m"].index(recommended),
+                format_func=lambda x: {
+                    "5": "5分钟", "15": "15分钟", "30": "30分钟",
+                    "60": "60分钟", "d": "日线", "w": "周线", "m": "月线"}.get(x, x))
+
+            freq_hint = {"5": "适合 < 1个月", "d": "适合 1月~3年", "w": "适合 > 3年"}.get(recommended, "")
+            if freq_hint:
+                st.caption(f"💡 自动推荐：{freq_hint}")
+        else:
+            frequency = st.selectbox("K线频率",
+                options=["5", "15", "30", "60", "d", "w", "m"], index=0,
+                format_func=lambda x: {
+                    "5": "5分钟", "15": "15分钟", "30": "30分钟",
+                    "60": "60分钟", "d": "日线", "w": "周线", "m": "月线"}.get(x, x))
+
         adjustflag = st.selectbox("复权类型", options=["1", "2", "3"], index=2,
-            format_func=lambda x: {"1": "前复权", "2": "后复权", "3": "不复权"}.get(x, x))
+            format_func=lambda x: {"1": "前复权", "2": "后复权",
+                                   "3": "不复权"}.get(x, x))
         show_quarterly = st.checkbox("季频财务数据", value=False)
 
+        # P0: 本地仓库开关
+        use_local_store = st.checkbox("使用本地数据仓库", value=True,
+            help="关闭则每次从 API 重新拉取")
+        if st.checkbox("📦 查看本地数据概况"):
+            try:
+                overview = get_data_overview()
+                if not overview.empty:
+                    st.dataframe(overview, height=150)
+                else:
+                    st.caption("本地暂无数据")
+            except Exception:
+                st.caption("数据仓库不可用")
+
     st.sidebar.write("")
-    run_button = st.sidebar.button("▶️ 运行回测", type="primary", use_container_width=True)
+    run_button = st.sidebar.button("▶️ 运行回测", type="primary",
+                                   use_container_width=True)
 
     config = GridTradingConfig(
         stock_code=stock_code,
@@ -157,13 +219,13 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         atr_tp_multiplier=atr_tp_mult,
     )
 
-    return config, run_button
+    return config, run_button, use_local_store
+
+
+# ========== 主函数 ==========
 def main() -> None:
-    """主函数：渲染 UI、执行回测、显示结果"""
+    config, run_button, use_local_store = sidebar_config()
 
-    config, run_button = sidebar_config()
-
-    # 标题区
     st.title("📈 GTAP - Grid Trading Analysis Platform")
     st.markdown("---")
 
@@ -171,52 +233,62 @@ def main() -> None:
         st.info("👈 请在左侧边栏配置参数，然后点击「运行网格交易回测」")
         return
 
-    # ========== 数据获取 ==========
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def fetch_stock_data(code, start_date, end_date, frequency, adjustflag, show_quarterly, data_source):
-        return get_stock_data(
-            code=code,
-            start_date=start_date,
-            end_date=end_date,
-            frequency=frequency,
-            adjustflag=adjustflag,
-            show_quarterly=show_quarterly,
-            data_source=data_source,
+    # ===== P1: 进度条数据获取 =====
+    progress_placeholder = st.empty()
+    status_placeholder = st.empty()
+
+    progress_placeholder.progress(0, "准备获取数据...")
+    status_placeholder.info("正在连接数据源...")
+
+    def streamlit_progress(msg: str, pct: int):
+        """进度回调：同时更新进度条和状态文字"""
+        progress_placeholder.progress(min(pct, 100), msg)
+        status_placeholder.info(msg)
+
+    # ===== 数据获取 =====
+    streamlit_progress("开始获取数据...", 3)
+
+    try:
+        stock_data = get_stock_data(
+            code=config.stock_code,
+            start_date=config.start_date,
+            end_date=config.end_date,
+            frequency=config.frequency,
+            adjustflag=config.adjustflag,
+            show_quarterly=config.show_quarterly_data,
+            data_source=config.data_source,
+            use_local_store=use_local_store,
+            progress_callback=streamlit_progress,
         )
-
-    with st.spinner(f"正在获取 {config.stock_code} 数据({config.data_source})..."):
-        try:
-            stock_data = fetch_stock_data(
-                code=config.stock_code,
-                start_date=config.start_date,
-                end_date=config.end_date,
-                frequency=config.frequency,
-                adjustflag=config.adjustflag,
-                show_quarterly=config.show_quarterly_data,
-                data_source=config.data_source,
-            )
-            data = stock_data.kline
-        except DataFetchError as e:
-            st.error(f"数据获取失败: {e}")
-            return
-        except Exception as e:
-            st.error(f"未知错误: {e}")
-            return
-
-    if data.empty:
-        st.error("未获取到数据，请检查股票代码和日期范围")
+        data = stock_data.kline
+    except DataFetchError as e:
+        progress_placeholder.empty()
+        status_placeholder.error(f"数据获取失败: {e}")
+        return
+    except Exception as e:
+        progress_placeholder.empty()
+        status_placeholder.error(f"未知错误: {e}")
         return
 
-    st.success(f"✅ 数据获取成功：共 {len(data)} 条 K 线记录")
+    if data.empty:
+        progress_placeholder.empty()
+        status_placeholder.error("未获取到数据，请检查股票代码和日期范围")
+        return
 
-    # 计算 ATR（如果启用止损止盈 或 自动网格范围需要）
+    # 清理进度条，显示成功
+    progress_placeholder.empty()
+    status_placeholder.success(
+        f"✅ 数据就绪：{len(data)} 条记录 "
+        f"({data.index[0].strftime('%Y-%m-%d') if hasattr(data.index[0], 'strftime') else str(data.index[0])} "
+        f"~ {data.index[-1].strftime('%Y-%m-%d') if hasattr(data.index[-1], 'strftime') else str(data.index[-1])})"
+    )
+
+    # ===== ATR 计算 =====
     atr_series = None
     if config.use_atr_stop or config.auto_grid_range:
-        from src.gtap.atr import calculate_atr
         with st.spinner("正在计算 ATR 指标..."):
             try:
                 atr_series = calculate_atr(data, period=config.atr_period)
-                # 显示 ATR 统计
                 valid_atr = atr_series.dropna()
                 if len(valid_atr) > 0:
                     col1, col2, col3 = st.columns(3)
@@ -225,12 +297,11 @@ def main() -> None:
                     col3.metric("ATR 最大值", f"{valid_atr.max():.4f}")
             except Exception as e:
                 st.warning(f"ATR 计算失败: {e}")
-                atr_series = None
                 if config.auto_grid_range:
-                    st.error("自动网格范围依赖 ATR，请关闭自动网格范围或确保数据包含 high/low/close 列")
+                    st.error("自动网格范围依赖 ATR，请关闭自动网格范围或确保数据完整")
                     return
 
-    # ========== 股票数据概览 ==========
+    # ===== 股票数据概览 =====
     st.header("📊 股票历史 K 线数据")
     latest = data.iloc[-1]
     col1, col2, col3, col4 = st.columns(4)
@@ -245,7 +316,7 @@ def main() -> None:
         pct_change = (latest["close"] / data.iloc[-2]["close"] - 1) * 100
         col6.metric("涨跌幅", f"{pct_change:.2f}%")
 
-    # ========== 网格交易回测 ==========
+    # ===== 回测 =====
     st.markdown("---")
     st.header("🔁 网格交易回测")
 
@@ -256,56 +327,52 @@ def main() -> None:
             st.error(f"回测失败: {e}")
             return
 
-    # ========== K 线图（含交易标注）==========
+    # ===== K 线图 =====
     st.markdown("---")
     st.header("📊 K 线图 & 交易标注")
-    fig_kline = plot_kline(data, config.stock_code, atr_series=atr_series, trades=result.trades)
+    fig_kline = plot_kline(data, config.stock_code,
+                           atr_series=atr_series, trades=result.trades)
     st.plotly_chart(fig_kline, width="stretch")
 
-    # ---------- 交易记录 ----------
+    # ===== 交易记录 =====
     st.subheader("📋 交易记录")
-    trades_df = pd.DataFrame(
-        [
-            {
-                "操作": t.action,
-                "时间": t.timestamp,
-                "价格": f"{t.price:.2f}",
-                "数量": t.shares,
-                "持股总数": t.total_shares,
-                "佣金": f"{t.commission:.2f}",
-                "过户费": f"{t.transfer_fee:.2f}",
-                "印花税": f"{t.stamp_duty:.2f}",
-                "总费用": f"{t.total_fee:.2f}",
-                "持仓均价": f"{t.avg_price:.2f}",
-            }
-            for t in result.trades
-        ]
-    )
+    trades_df = pd.DataFrame([{
+        "操作": t.action,
+        "时间": t.timestamp,
+        "价格": f"{t.price:.2f}",
+        "数量": t.shares,
+        "持股总数": t.total_shares,
+        "佣金": f"{t.commission:.2f}",
+        "过户费": f"{t.transfer_fee:.2f}",
+        "印花税": f"{t.stamp_duty:.2f}",
+        "总费用": f"{t.total_fee:.2f}",
+        "持仓均价": f"{t.avg_price:.2f}",
+    } for t in result.trades])
     st.dataframe(trades_df, width='stretch', height=400)
 
-    # ---------- 资产曲线 ----------
+    # ===== 资产曲线 =====
     st.subheader("📈 资产价值变化")
     fig_asset = plot_asset_curve(data.index, result.asset_values)
     st.plotly_chart(fig_asset, width='stretch')
 
-    # ---------- 绩效指标 ----------
+    # ===== 绩效指标 =====
     st.subheader("📊 绩效指标")
 
-    # 计算指标（v0.3.0+: 从 asset_values 自动推导初始投资）
     metrics = calculate_metrics(
         asset_values=result.asset_values,
         trades=result.trades,
         total_fees=result.total_fees,
         start_date=pd.Timestamp(config.start_date),
         end_date=pd.Timestamp(config.end_date),
-        trade_profits=result.trade_profits,  # P1-7
+        trade_profits=result.trade_profits,
     )
 
-    # 展示指标卡片
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("初始资产", f"¥{result.asset_values[0]:,.2f}" if result.asset_values else "¥0.00")
-    col2.metric("最终资产", f"¥{result.asset_values[-1]:,.2f}" if result.asset_values else "¥0.00")
-    col3.metric("总利润（含费）", f"¥{result.asset_values[-1] - result.asset_values[0]:,.2f}" if result.asset_values else "¥0.00")
+    initial_val = result.asset_values[0] if result.asset_values else 0
+    final_val = result.asset_values[-1] if result.asset_values else 0
+    col1.metric("初始资产", f"¥{initial_val:,.2f}")
+    col2.metric("最终资产", f"¥{final_val:,.2f}")
+    col3.metric("总利润（含费）", f"¥{final_val - initial_val:,.2f}")
     col4.metric("总费用", f"¥{result.total_fees:,.2f}")
 
     col1, col2, col3 = st.columns(3)
@@ -313,7 +380,6 @@ def main() -> None:
     col2.metric("年化收益率", f"{metrics['annual_return']:.2f}%")
     col3.metric("年化波动率", f"{metrics['annual_volatility']:.2f}%")
 
-    # ATR 动态止损止盈统计（v0.3.0+）
     if config.use_atr_stop:
         st.markdown("**🛡️ ATR 动态止损止盈统计**")
         col_a, col_b, col_c, col_d, col_e = st.columns(5)
@@ -323,17 +389,22 @@ def main() -> None:
         col_d.metric("止损占比", f"{metrics['stop_loss_rate']:.2%}")
         col_e.metric("止盈占比", f"{metrics['take_profit_rate']:.2%}")
 
+    # 再平衡统计
+    if "rebalance" in config.strategy_mode:
+        st.markdown("**⚖️ 再平衡统计**")
+        col_r1, col_r2 = st.columns(2)
+        col_r1.metric("再平衡次数", str(metrics.get("rebalance_count", 0)))
+        col_r2.metric("再平衡溢价", f"{metrics.get('rebalancing_premium', 0):.4f}")
+
     col1, col2, col3 = st.columns(3)
     col1.metric("夏普比率", f"{metrics['sharpe_ratio']:.2f}")
     col2.metric("最大回撤", f"{metrics['max_drawdown']:.2f}%")
     col3.metric("胜率", f"{metrics.get('win_rate', 0):.2%}")
 
-    # 详细指标表格
     with st.expander("📑 详细指标表"):
         detail_df = pd.DataFrame([metrics])
         st.dataframe(detail_df, width='stretch')
 
 
-# ========== 运行入口 ==========
 if __name__ == "__main__":
     main()

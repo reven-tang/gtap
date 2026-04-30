@@ -33,6 +33,7 @@ from .atr import calculate_atr, get_atr_stop_levels, is_atr_stop_triggered
 from .strategies import StrategyEngine, TradeSignal, GridStrategy, RebalanceStrategy, create_strategy
 from .portfolio import PortfolioAssetConfig, PortfolioConfig, PortfolioResult, portfolio_backtest, PortfolioError
 from .parrondo import ParrondoConfig, ParrondoRound, ParrondoResult, parrondo_simulate, parrondo_grid_analysis
+from .store import DataStore, get_store
 from .providers import DataProvider, get_provider, available_providers
 from .providers.baostock_provider import BaoStockProvider
 
@@ -80,6 +81,9 @@ __all__ = [
     "ParrondoResult",
     "parrondo_simulate",
     "parrondo_grid_analysis",
+    # store
+    "DataStore",
+    "get_store",
     # providers
     "DataProvider",
     "get_provider",
