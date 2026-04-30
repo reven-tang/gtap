@@ -36,6 +36,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.7.0 - 香农理论落地改进 (2026-05-01)
+
+### 新增
+- `theory.py`: 香农理论计算模块
+  - 波动拖累 (σ²/2) 实时计算
+  - 凯利准则最优仓位推荐
+  - 再平衡溢价预估
+  - 市场状态判断（震荡/趋势/不确定）
+  - 网格参数智能推荐
+- `docs/best-practices.md`: 参数调优实战指南
+- `tests/test_theory.py`: 23项理论模块测试
+
+### 改进
+- 侧边栏策略选择：从下拉框 → 市场判断引导式选择
+  - 震荡市 → 推荐经典网格
+  - 趋势市 → 推荐阈值再平衡
+  - 不确定 → 推荐周期再平衡
+- 理论洞察面板：实时显示波动拖累/再平衡溢价/净收益
+- 香农解读板块：回测结果的理论解读 + 优化建议
+- README: 版本号 0.5.0-dev → 0.7.0, 测试数 98 → 141
+
+### 测试
+- 141 passed (新增 23 理论测试)
+
 ## [0.5.0] — 2026-04-30
 
 ### Added 新增

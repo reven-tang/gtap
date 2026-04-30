@@ -22,6 +22,12 @@ from src.gtap.data import auto_frequency, get_data_overview
 from src.gtap.store import get_store
 from src.gtap.atr import calculate_atr
 from src.gtap.providers.factory import available_providers
+from src.gtap.theory import (
+    calculate_shannon_insight,
+    recommend_grid_params,
+    get_market_regime,
+    ShannonInsight,
+)
 import pandas as pd
 
 
@@ -59,7 +65,10 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
             format_func=lambda x: {"baostock": "BaoStock (A股免费)",
                                    "yfinance": "YFinance (港美股)",
                                    "akshare": "AkShare (A股增强)"}.get(x, x))
-        if data_source != "baostock":
+        # P0: 香农理论提示
+st.info("💡 **香农提示**：再平衡可以从波动中创造收益。波动越大，潜在再平衡溢价越高。")
+
+if data_source != "baostock":
             hint = {"yfinance": "A股：600958.SS / 美股：AAPL",
                     "akshare": "纯数字：600958 / 000001"}.get(data_source, "")
             if hint:
@@ -92,13 +101,50 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
             format_func=lambda x: {"arithmetic": "等差间距",
                                    "geometric": "等比间距"}.get(x, x))
 
-        strategy_mode = st.selectbox("策略模式",
-            options=["grid", "rebalance_threshold", "rebalance_periodic"],
-            format_func=lambda x: {"grid": "经典网格",
-                                   "rebalance_threshold": "阈值再平衡",
-                                   "rebalance_periodic": "周期再平衡"}.get(x, x))
+        # P0: 策略模式引导 - 基于市场判断推荐
+st.markdown("**🎯 你的市场判断？**")
+market_regime = st.radio("",
+    options=["震荡市", "趋势市", "不确定"],
+    index=0,
+    horizontal=True,
+    label_visibility="collapsed",
+    help="震荡市：价格在区间内波动 | 趋势市：有明显上涨或下跌趋势")
 
-        if "rebalance" in strategy_mode:
+# 根据市场判断推荐策略
+regime_to_strategy = {
+    "震荡市": ("grid", "📊 经典网格（推荐）"),
+    "趋势市": ("rebalance_threshold", "⚖️ 阈值再平衡（推荐）"),
+    "不确定": ("rebalance_periodic", "📅 周期再平衡（推荐）"),
+}
+recommended_strategy, recommended_label = regime_to_strategy[market_regime]
+
+strategy_options = ["grid", "rebalance_threshold", "rebalance_periodic"]
+strategy_labels = {
+    "grid": "📊 经典网格" + (" ✓" if market_regime == "震荡市" else ""),
+    "rebalance_threshold": "⚖️ 阈值再平衡" + (" ✓" if market_regime == "趋势市" else ""),
+    "rebalance_periodic": "📅 周期再平衡" + (" ✓" if market_regime == "不确定" else ""),
+}
+
+current_index = strategy_options.index(recommended_strategy)
+strategy_mode = st.selectbox("策略模式",
+    options=strategy_options,
+    index=current_index,
+    format_func=lambda x: strategy_labels.get(x, x))
+
+# 显示推荐理由
+if strategy_mode == recommended_strategy:
+    st.success(f"💡 {market_regime}推荐此策略：{'低买高卖，频繁收割波动' if market_regime=='震荡市' else '捕捉趋势中的回调，减少过度交易' if market_regime=='趋势市' else '定期再平衡，避免情绪化操作'}")
+else:
+    st.info("💡 切换策略可查看不同推荐")
+
+        # ========== P0: 理论洞察面板 ==========
+with st.sidebar.expander("🧠 香农理论洞察", expanded=False):
+    st.markdown("**基于当前配置的理论预期**")
+    st.info("💡 数据获取后将显示详细的波动拖累和再平衡溢价分析")
+    st.markdown("---")
+    st.caption("波动不是风险，而是收益来源——前提是有正确的再平衡机制")
+
+if "rebalance" in strategy_mode:
             target_allocation = st.slider("目标股票比例", min_value=0.1,
                 max_value=0.9, value=0.5, step=0.05,
                 format_func=lambda x: f"{x*100:.0f}%")
@@ -141,6 +187,11 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
 
         # P1: 自动降采样
         auto_freq = st.checkbox("自动推荐频率", value=True,
+            help="根据时间跨度自动选择最佳 K 线频率")
+
+        # P1: 智能网格推荐
+        if st.checkbox("🎯 智能网格推荐", value=False):
+            st.info("获取数据后将基于ATR自动计算最优网格参数")
             help="根据时间跨度自动选择最佳 K 线频率")
 
         if auto_freq:
@@ -301,6 +352,52 @@ def main() -> None:
                     st.error("自动网格范围依赖 ATR，请关闭自动网格范围或确保数据完整")
                     return
 
+    # ===== P0: 香农理论洞察面板（实时计算）=====
+    st.header("🧠 香农理论洞察")
+
+    with st.spinner("正在计算理论预期..."):
+        try:
+            insight = calculate_shannon_insight(
+                price_data=data["close"],
+                grid_upper=config.grid_upper,
+                grid_lower=config.grid_lower,
+                grid_count=config.grid_number,
+                target_allocation=getattr(config, 'target_allocation', 0.5),
+                commission_rate=config.commission_rate,
+                rebalance_threshold=getattr(config, 'rebalance_threshold', 0.05),
+            )
+
+            # 显示理论指标
+            col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+            col_t1.metric("年化波动率", f"{insight.volatility*100:.1f}%")
+            col_t2.metric("波动拖累", f"{insight.volatility_drag*100:.2f}%",
+                         help="波动对几何收益的隐性惩罚")
+            col_t3.metric("预期再平衡", f"{insight.expected_rebalances}次")
+            col_t4.metric("再平衡溢价", f"{insight.rebalancing_premium*100:.2f}%",
+                         help="再平衡策略相比买入持有的超额收益")
+
+            # 收益对比
+            col_b1, col_b2, col_b3 = st.columns(3)
+            col_b1.metric("📉 买入持有预期", f"{insight.buy_hold_return*100:.1f}%")
+            col_b2.metric("📈 再平衡预期", f"{insight.rebalanced_return*100:.1f}%")
+            delta_color = "normal" if insight.net_benefit >= 0 else "inverse"
+            col_b3.metric("💎 净收益", f"{insight.net_benefit*100:.2f}%",
+                         delta=f"{insight.rebalancing_premium*100:.1f}% 溢价 - 成本",
+                         delta_color=delta_color)
+
+            # 配置建议
+            if insight.confidence == "高":
+                st.success(f"✅ **{insight.recommendation}**")
+            elif insight.confidence == "中":
+                st.info(f"ℹ️ **{insight.recommendation}**")
+            else:
+                st.warning(f"⚠️ **{insight.recommendation}**")
+
+        except Exception as e:
+            st.warning(f"理论计算暂时不可用: {e}")
+
+    st.markdown("---")
+
     # ===== 股票数据概览 =====
     st.header("📊 股票历史 K 线数据")
     latest = data.iloc[-1]
@@ -404,6 +501,46 @@ def main() -> None:
     with st.expander("📑 详细指标表"):
         detail_df = pd.DataFrame([metrics])
         st.dataframe(detail_df, width='stretch')
+
+    # ===== P1: 香农解读板块 =====
+    st.markdown("---")
+    st.header("📚 本次回测的香农解读")
+
+    try:
+        # 重新计算insight用于解读
+        insight = calculate_shannon_insight(
+            price_data=data["close"],
+            grid_upper=config.grid_upper,
+            grid_lower=config.grid_lower,
+            grid_count=config.grid_number,
+        )
+
+        col_s1, col_s2 = st.columns(2)
+
+        with col_s1:
+            st.markdown("**📊 波动分析**")
+            st.write(f"- 年化波动率: **{insight.volatility*100:.1f}%**")
+            st.write(f"- 波动拖累: **{insight.volatility_drag*100:.2f}%** (买入持有的隐性损失)")
+            st.write(f"- 理论最优仓位: **{insight.optimal_allocation*100:.0f}%** (凯利准则)")
+
+        with col_s2:
+            st.markdown("**⚖️ 再平衡效果**")
+            actual_premium = metrics.get('rebalancing_premium', 0)
+            st.write(f"- 实际再平衡溢价: **{actual_premium:.4f}**")
+            st.write(f"- 理论预期溢价: **{insight.rebalancing_premium*100:.2f}%**")
+            st.write(f"- 再平衡次数: **{metrics.get('rebalance_count', 0)}** 次")
+
+        # 建议
+        st.markdown("**💡 优化建议**")
+        if insight.net_benefit > 0.02:
+            st.success("当前配置表现优秀！再平衡策略有效捕捉了波动收益。")
+        elif insight.net_benefit > 0:
+            st.info("当前配置可行。可考虑放宽再平衡阈值以减少交易摩擦。")
+        else:
+            st.warning("当前配置可能受交易摩擦影响较大。建议：1) 减少网格数量 2) 放宽阈值 3) 或选择更低费率券商")
+
+    except Exception as e:
+        st.caption(f"详细解读生成中... ({e})")
 
 
 if __name__ == "__main__":

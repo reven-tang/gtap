@@ -36,6 +36,14 @@ from .parrondo import ParrondoConfig, ParrondoRound, ParrondoResult, parrondo_si
 from .store import DataStore, get_store
 from .providers import DataProvider, get_provider, available_providers
 from .providers.baostock_provider import BaoStockProvider
+from .theory import (
+    ShannonInsight,
+    calculate_shannon_insight,
+    recommend_grid_params,
+    get_market_regime,
+    calculate_volatility_drag,
+    kelly_criterion,
+)
 
 __all__ = [
     # config
@@ -89,6 +97,13 @@ __all__ = [
     "get_provider",
     "available_providers",
     "BaoStockProvider",
+    # theory
+    "ShannonInsight",
+    "calculate_shannon_insight",
+    "recommend_grid_params",
+    "get_market_regime",
+    "calculate_volatility_drag",
+    "kelly_criterion",
     # exceptions
     "DataFetchError",
     "GridTradingError",

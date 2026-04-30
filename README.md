@@ -5,9 +5,9 @@
 **基于香农的恶魔理论的网格交易回测平台**
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-98%20passed-green)](tests/)
+[![Tests](https://img.shields.io/badge/tests-141%20passed-green)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.0--dev-orange)](PROGRESS.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](PROGRESS.md)
 
 </div>
 
@@ -320,10 +320,13 @@ gtap/
 │   ├── parrondo.py        # Parrondo悖论模拟
 │   ├── strategies.py      # 策略引擎抽象（ABC+工厂）
 │   ├── atr.py             # ATR计算与止损止盈
+│   ├── theory.py           # 香农理论计算（波动拖累/凯利/市场状态）
 │   ├── plot.py            # Plotly/Matplotlib可视化
 │   └── exceptions.py      # 自定义异常
 ├── app.py                 # Streamlit应用入口
-├── tests/                 # 98个单元测试
+├── docs/                  # 最佳实践指南
+│   └── best-practices.md  # 参数调优 + 实战案例
+├── tests/                 # 141个单元测试
 ├── PROGRESS.md            # 进度追踪与对齐度
 ├── ROADMAP.md             # 版本路线图
 └── README.md              # 本文件
@@ -338,7 +341,7 @@ gtap/
 - **可视化**: Plotly, Matplotlib, mplfinance
 - **数据源**: BaoStock, YFinance, AkShare
 - **存储**: DuckDB 列式数据仓库（本地持久化 + 增量更新） + DuckDB 本地数据仓库
-- **测试**: pytest (98 tests)
+- **测试**: pytest (141 tests)
 - **Python**: 3.12+
 
 ---
