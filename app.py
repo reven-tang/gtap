@@ -99,6 +99,33 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
 
     # ---- 数据源选项 ----
     st.sidebar.subheader("数据源选项")
+    
+    # 数据源选择
+    from src.gtap.providers.factory import available_providers
+    available = available_providers()
+    data_source = st.sidebar.selectbox(
+        "数据源",
+        options=available,
+        index=0,
+        format_func=lambda x: {
+            "baostock": "BaoStock (A股免费)",
+            "yfinance": "YFinance (港美股)",
+            "akshare": "AkShare (A股增强)",
+        }.get(x, x),
+        help="选择数据源。BaoStock 支持 A 股；YFinance 支持港美股；AkShare 提供更丰富 A 股数据",
+    )
+    
+    # 根据数据源调整代码提示
+    code_hint = {
+        "baostock": "沪市：sh.601398；深市：sz.000001",
+        "yfinance": "A股：601398.SS / 美股：AAPL / 港股：0700.HK",
+        "akshare": "纯数字：601398 / 000001",
+    }.get(data_source, "请输入股票代码")
+    
+    # 更新股票代码输入提示（仅 yfinance/akshare 时显示额外提示）
+    if data_source != "baostock":
+        st.sidebar.info(f"💡 {data_source} 代码格式: {code_hint}")
+
     frequency = st.sidebar.selectbox(
         "K线频率",
         options=["5", "15", "30", "60", "d", "w", "m"],
@@ -154,6 +181,7 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         commission_rate=commission_rate,
         transfer_fee_rate=transfer_fee_rate,
         stamp_duty_rate=stamp_duty_rate,
+        data_source=data_source,
         frequency=frequency,
         adjustflag=adjustflag,
         show_quarterly_data=show_quarterly,
@@ -183,7 +211,7 @@ def main() -> None:
 
     # ========== 数据获取 ==========
     @st.cache_data(ttl=3600, show_spinner=False)
-    def fetch_stock_data(code, start_date, end_date, frequency, adjustflag, show_quarterly):
+    def fetch_stock_data(code, start_date, end_date, frequency, adjustflag, show_quarterly, data_source):
         return get_stock_data(
             code=code,
             start_date=start_date,
@@ -191,9 +219,10 @@ def main() -> None:
             frequency=frequency,
             adjustflag=adjustflag,
             show_quarterly=show_quarterly,
+            data_source=data_source,
         )
 
-    with st.spinner(f"正在获取 {config.stock_code} 数据..."):
+    with st.spinner(f"正在获取 {config.stock_code} 数据({config.data_source})..."):
         try:
             stock_data = fetch_stock_data(
                 code=config.stock_code,
@@ -202,6 +231,7 @@ def main() -> None:
                 frequency=config.frequency,
                 adjustflag=config.adjustflag,
                 show_quarterly=config.show_quarterly_data,
+                data_source=config.data_source,
             )
             data = stock_data.kline
         except DataFetchError as e:

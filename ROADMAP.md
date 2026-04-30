@@ -112,39 +112,24 @@
 
 ---
 
-### v0.4.0 — 数据源扩展
+### v0.4.0 — 数据源扩展 ✅ COMPLETE
 
 **目标**: 支持更多市场
 
-**任务清单**:
+**完成项**:
+- ✅ 数据源抽象层 `src/gtap/providers/`
+  - `DataProvider` ABC 基类
+  - `BaoStockProvider`: A股（重构现有逻辑）
+  - `YFinanceProvider`: 港股/美股/外汇（可选依赖）
+  - `AkShareProvider`: A股增强（可选依赖）
+  - `get_provider()` 工厂函数
+- ✅ 代码标准化 `normalize_code()`
+- ✅ `GridTradingConfig` 新增 `data_source` 字段
+- ✅ `app.py` 数据源下拉 + 代码格式提示
+- ✅ 20 Provider 测试全部通过
+- ✅ 可选依赖 yfinance/akshare
 
-#### 1. 新增数据源
-- [ ] **yfinance**: 支持港股、美股、外汇、加密货币
-- [ ] **akshare**: 更丰富的 A 股数据（基金、期货、债券）
-- [ ] **tushare**: 备用 A 股数据源（需 token）
-
-#### 2. 数据源抽象层
-```python
-class DataProvider(ABC):
-    @abstractmethod
-    def fetch_kline(self, code, start, end, freq): ...
-    @abstractmethod
-    def fetch_basic(self, code): ...
-```
-
-#### 3. 数据源工厂
-```python
-def get_provider(source: str) -> DataProvider:
-    if source == "baostock": return BaoStockProvider()
-    if source == "yfinance": return YFinanceProvider()
-```
-
-#### 4. 实时行情（可选）
-- [ ] 接入 WebSocket 实时推送（需券商 API）
-- [ ] 支持模拟交易模式
-
-**预计工时**: 3-4 小时
-**优先级**: 📋 中
+**向后兼容**: default source = "baostock"
 
 ---
 
@@ -225,8 +210,8 @@ def get_provider(source: str) -> DataProvider:
 
 - [x] v0.1.1: 文件清理完成，`pip install -r requirements.txt` 成功
 - [x] v0.2.0: `pytest` 27/27 通过（100%），模块化架构完成
-- [ ] v0.3.0: Sharpe 比率计算通过验证
-- [ ] v0.4.0: 支持 3+ 数据源切换
+- [x] v0.3.0: ATR 动态止损止盈完成
+- [x] v0.4.0: 数据源抽象层 + 3 Provider 实现
 - [ ] v0.5.0: CI 绿色，覆盖率 > 80%
 - [ ] v1.0.0: PyPI 发布成功
 

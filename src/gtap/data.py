@@ -1,13 +1,14 @@
 """
 数据获取模块 - GTAP 网格交易回测平台
 
-封装 baostock 数据获取逻辑，支持 K线数据、除权除息、基本资料和季频财务数据。
+封装多数据源获取逻辑，支持 baostock、yfinance、akshare。
+通过 DataProvider 抽象层实现数据源切换。
 """
 
-from typing import NamedTuple
-import baostock as bs
+from typing import NamedTuple, Optional
 import pandas as pd
 from .exceptions import DataFetchError
+from .providers.factory import get_provider
 
 
 class StockData(NamedTuple):
@@ -32,17 +33,24 @@ def get_stock_data(
     frequency: str = "5",
     adjustflag: str = "3",
     show_quarterly: bool = False,
+    data_source: str = "baostock",
 ) -> StockData:
     """
     获取股票数据（K线 + 财务数据）。
 
+    通过 data_source 参数选择数据源，内部使用 DataProvider 抽象层。
+
     Args:
-        code: 股票代码，如 "sh.601398"
+        code: 股票代码，格式因数据源而异
+            - baostock: "sh.601398"
+            - yfinance: "601398.SS" 或 "AAPL"
+            - akshare: "601398"
         start_date: 开始日期，YYYY-MM-DD
         end_date: 结束日期，YYYY-MM-DD
-        frequency: K线频率，"5"（5分钟）/"15"/"30"/"60"/"d"/"w"/"m"
+        frequency: K线频率，"5"/"15"/"30"/"60"/"d"/"w"/"m"
         adjustflag: 复权类型，"1"=前复权 "2"=后复权 "3"=不复权
-        show_quarterly: 是否获取季频财务数据
+        show_quarterly: 是否获取季频财务数据（仅 baostock 支持）
+        data_source: 数据源，"baostock"/"yfinance"/"akshare"
 
     Returns:
         StockData 命名元组，包含各类数据表
@@ -51,135 +59,80 @@ def get_stock_data(
         DataFetchError: 数据获取失败
     """
     try:
-        # 登录
-        lg = bs.login()
-        if lg.error_code != "0":
-            raise DataFetchError(f"baostock 登录失败: {lg.error_msg}", code=lg.error_code)
+        provider = get_provider(data_source)
+        normalized_code = provider.normalize_code(code)
 
-        # 查询 K 线数据
-        rs = bs.query_history_k_data_plus(
-            code,
-            "date,time,code,open,high,low,close,volume",
+        # K线数据
+        kline_df = provider.fetch_kline(
+            code=normalized_code,
             start_date=start_date,
             end_date=end_date,
             frequency=frequency,
             adjustflag=adjustflag,
         )
-        kline_list = []
-        while rs.error_code == "0" and rs.next():
-            kline_list.append(rs.get_row_data())
-        kline_df = pd.DataFrame(kline_list, columns=rs.fields)
 
-        # 数据清洗：合并日期和时间为 datetime 索引
-        if not kline_df.empty:
-            # baostock 的 time 字段格式因频率而异：
-            # - 日线/周线/月线：time 返回纯数字日期 (如 "20250102" 或 "20250102000000")
-            # - 分钟线：time 返回时间字符串 (如 "09:35:00" 或 "09:35:00.000")
-            # pandas 3.x 对日期解析更严格，需要分别处理
-            import numpy as np
-            time_series = kline_df["time"].fillna("").astype(str)
-            is_date_fmt = time_series.str.match(r"^\d+$")  # 纯数字 = 日期格式
-            
-            kline_df["datetime"] = np.where(
-                is_date_fmt,
-                kline_df["date"].astype(str),                             # 日线：只用 date
-                kline_df["date"].astype(str) + " " + time_series.str[:8]  # 分钟线：date + time
-            )
-            kline_df["datetime"] = pd.to_datetime(kline_df["datetime"], format="mixed")
-            kline_df = kline_df.set_index("datetime")
-            # 数值列转换为 float
-            numeric_cols = ["open", "high", "low", "close", "volume"]
-            kline_df[numeric_cols] = kline_df[numeric_cols].astype(float)
+        # 除权除息
+        dividend_df = provider.fetch_dividend(normalized_code)
 
-        # 查询除权除息
-        rs_dividend = bs.query_dividend_data(code=code, year="", yearType="report")
-        dividend_list = []
-        while rs_dividend.error_code == "0" and rs_dividend.next():
-            dividend_list.append(rs_dividend.get_row_data())
-        dividend_df = pd.DataFrame(dividend_list, columns=rs_dividend.fields)
+        # 基本资料
+        stock_basic_df = provider.fetch_basic(normalized_code)
 
-        # 查询证券基本资料
-        rs_basic = bs.query_stock_basic(code=code)
-        basic_list = []
-        while rs_basic.error_code == "0" and rs_basic.next():
-            basic_list.append(rs_basic.get_row_data())
-        stock_basic_df = pd.DataFrame(basic_list, columns=rs_basic.fields)
+        # 季频财务数据（仅 baostock 支持）
+        empty_df = pd.DataFrame()
+        profit_df = empty_df
+        operation_df = empty_df
+        growth_df = empty_df
+        balance_df = empty_df
+        cash_flow_df = empty_df
+        dupont_df = empty_df
+        performance_express_df = empty_df
+        forecast_df = empty_df
 
-        # 季频财务数据（可选）
-        profit_df = pd.DataFrame()
-        operation_df = pd.DataFrame()
-        growth_df = pd.DataFrame()
-        balance_df = pd.DataFrame()
-        cash_flow_df = pd.DataFrame()
-        dupont_df = pd.DataFrame()
-        performance_express_df = pd.DataFrame()
-        forecast_df = pd.DataFrame()
-
-        if show_quarterly:
+        if show_quarterly and data_source == "baostock":
+            # 季频财务数据仅 baostock 支持
+            import baostock as bs
+            lg = bs.login()
             year = start_date[:4]
 
-            # 盈利能力
-            rs_profit = bs.query_profit_data(code=code, year=year, quarter="1")
-            profit_list = []
-            while rs_profit.error_code == "0" and rs_profit.next():
-                profit_list.append(rs_profit.get_row_data())
-            profit_df = pd.DataFrame(profit_list, columns=rs_profit.fields)
+            def _fetch_baostock_table(query_fn, code, year, quarter="1"):
+                rs = query_fn(code=code, year=year, quarter=quarter)
+                rows = []
+                while rs.error_code == "0" and rs.next():
+                    rows.append(rs.get_row_data())
+                return pd.DataFrame(rows, columns=rs.fields) if rows else pd.DataFrame()
 
-            # 营运能力
-            rs_operation = bs.query_operation_data(code=code, year=year, quarter="1")
-            operation_list = []
-            while rs_operation.error_code == "0" and rs_operation.next():
-                operation_list.append(rs_operation.get_row_data())
-            operation_df = pd.DataFrame(operation_list, columns=rs_operation.fields)
+            profit_df = _fetch_baostock_table(bs.query_profit_data, normalized_code, year)
+            operation_df = _fetch_baostock_table(bs.query_operation_data, normalized_code, year)
+            growth_df = _fetch_baostock_table(bs.query_growth_data, normalized_code, year)
+            balance_df = _fetch_baostock_table(bs.query_balance_data, normalized_code, year)
+            cash_flow_df = _fetch_baostock_table(bs.query_cash_flow_data, normalized_code, year)
+            dupont_df = _fetch_baostock_table(bs.query_dupont_data, normalized_code, year)
 
-            # 成长能力
-            rs_growth = bs.query_growth_data(code=code, year=year, quarter="1")
-            growth_list = []
-            while rs_growth.error_code == "0" and rs_growth.next():
-                growth_list.append(rs_growth.get_row_data())
-            growth_df = pd.DataFrame(growth_list, columns=rs_growth.fields)
-
-            # 偿债能力
-            rs_balance = bs.query_balance_data(code=code, year=year, quarter="1")
-            balance_list = []
-            while rs_balance.error_code == "0" and rs_balance.next():
-                balance_list.append(rs_balance.get_row_data())
-            balance_df = pd.DataFrame(balance_list, columns=rs_balance.fields)
-
-            # 现金流量
-            rs_cash_flow = bs.query_cash_flow_data(code=code, year=year, quarter="1")
-            cash_flow_list = []
-            while rs_cash_flow.error_code == "0" and rs_cash_flow.next():
-                cash_flow_list.append(rs_cash_flow.get_row_data())
-            cash_flow_df = pd.DataFrame(cash_flow_list, columns=rs_cash_flow.fields)
-
-            # 杜邦指数
-            rs_dupont = bs.query_dupont_data(code=code, year=year, quarter="1")
-            dupont_list = []
-            while rs_dupont.error_code == "0" and rs_dupont.next():
-                dupont_list.append(rs_dupont.get_row_data())
-            dupont_df = pd.DataFrame(dupont_list, columns=rs_dupont.fields)
-
-            # 业绩快报
-            rs_performance = bs.query_performance_express_report(
-                code=code, start_date=start_date, end_date=end_date
+            rs_perf = bs.query_performance_express_report(
+                code=normalized_code, start_date=start_date, end_date=end_date
             )
-            performance_list = []
-            while rs_performance.error_code == "0" and rs_performance.next():
-                performance_list.append(rs_performance.get_row_data())
-            performance_express_df = pd.DataFrame(performance_list, columns=rs_performance.fields)
+            perf_rows = []
+            while rs_perf.error_code == "0" and rs_perf.next():
+                perf_rows.append(rs_perf.get_row_data())
+            performance_express_df = pd.DataFrame(
+                perf_rows, columns=rs_perf.fields
+            ) if perf_rows else pd.DataFrame()
 
-            # 业绩预告
             rs_forecast = bs.query_forecast_report(
-                code=code, start_date=start_date, end_date=end_date
+                code=normalized_code, start_date=start_date, end_date=end_date
             )
-            forecast_list = []
+            forecast_rows = []
             while rs_forecast.error_code == "0" and rs_forecast.next():
-                forecast_list.append(rs_forecast.get_row_data())
-            forecast_df = pd.DataFrame(forecast_list, columns=rs_forecast.fields)
+                forecast_rows.append(rs_forecast.get_row_data())
+            forecast_df = pd.DataFrame(
+                forecast_rows, columns=rs_forecast.fields
+            ) if forecast_rows else pd.DataFrame()
 
-        # 登出
-        bs.logout()
+            bs.logout()
+
+        elif show_quarterly and data_source != "baostock":
+            # 非 baostock 数据源暂不支持季频财务数据
+            pass
 
         return StockData(
             kline=kline_df,
@@ -195,5 +148,7 @@ def get_stock_data(
             forecast=forecast_df,
         )
 
+    except DataFetchError:
+        raise
     except Exception as e:
         raise DataFetchError(f"数据获取失败: {e}", original_error=e)

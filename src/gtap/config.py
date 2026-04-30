@@ -37,6 +37,7 @@ class GridTradingConfig:
     stamp_duty_rate: float = 0.001      # 印花税（卖出 0.1%）
 
     # 数据源选项
+    data_source: Literal["baostock", "yfinance", "akshare"] = "baostock"  # 数据源
     frequency: Literal["5", "15", "30", "60", "d", "w", "m"] = "5"  # K线频率
     adjustflag: Literal["1", "2", "3"] = "3"  # 复权类型 1:前复权 2:后复权 3:不复权
     show_quarterly_data: bool = False  # 是否显示季频财务数据
@@ -104,6 +105,7 @@ class GridTradingConfig:
             "commission_rate": self.commission_rate,
             "transfer_fee_rate": self.transfer_fee_rate,
             "stamp_duty_rate": self.stamp_duty_rate,
+            "data_source": self.data_source,
             "frequency": self.frequency,
             "adjustflag": self.adjustflag,
             "show_quarterly_data": self.show_quarterly_data,

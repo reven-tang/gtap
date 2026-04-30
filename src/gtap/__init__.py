@@ -30,6 +30,8 @@ from .exceptions import (
     PlotError,
 )
 from .atr import calculate_atr, get_atr_stop_levels
+from .providers import DataProvider, get_provider, available_providers
+from .providers.baostock_provider import BaoStockProvider
 
 __all__ = [
     # config
@@ -56,6 +58,11 @@ __all__ = [
     # atr
     "calculate_atr",
     "get_atr_stop_levels",
+    # providers
+    "DataProvider",
+    "get_provider",
+    "available_providers",
+    "BaoStockProvider",
     # exceptions
     "DataFetchError",
     "GridTradingError",

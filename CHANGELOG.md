@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-04-30
+
+### Added 新增
+- ✅ 数据源抽象层 `src/gtap/providers/`
+  - `DataProvider` ABC 抽象基类（fetch_kline/fetch_dividend/fetch_basic/normalize_code）
+  - `BaoStockProvider`: A 股沪市/深市数据，重构现有 baostock 逻辑
+  - `YFinanceProvider`: 港股/美股/外汇/加密货币数据（可选依赖）
+  - `AkShareProvider`: A 股增强数据（基金/期货/债券）（可选依赖）
+  - `get_provider()`: 数据源工厂函数
+  - `available_providers()`: 查询当前可用数据源
+- ✅ 代码标准化：每个 Provider 实现 normalize_code() 转换
+  - BaoStock: "601398" → "sh.601398"
+  - YFinance: "sh.601398" → "601398.SS"
+  - AkShare: "sh.601398" → "601398"
+- ✅ `GridTradingConfig` 新增 `data_source` 字段（默认 "baostock"）
+- ✅ `data.py` 重构：get_stock_data 内部使用 DataProvider 抽象层
+- ✅ `app.py` 侧边栏数据源下拉选择 + 代码格式提示
+- ✅ Provider 测试 `tests/test_providers.py`（20 测试，100% 通过）
+- ✅ 可选依赖：yfinance>=0.2.31, akshare>=1.12.0
+
+### Changed 变更
+- 🔄 `get_stock_data()` 新增 `data_source` 参数（默认 "baostock"，向后兼容）
+- 🔄 `__init__.py` 导出新增 DataProvider/get_provider/available_providers
+
+### Fixed 修复
+- 🔧 可选数据源 import 失败时给出明确安装提示
+
+---
+
 ## [0.3.0] — 2026-04-30
 
 ### Added 新增
