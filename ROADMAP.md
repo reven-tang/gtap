@@ -84,7 +84,7 @@
 **实际工时**: 约 4 小时
 **状态**: ✅ 已完成
 
-### v0.3.0 — 回测引擎升级 ✅ PARTIALLY COMPLETE
+### v0.3.0 — 回测引擎升级 ✅ COMPLETE
 
 **目标**: 回测能力达到专业水平
 
@@ -100,16 +100,15 @@
 - ✅ ATR 单元测试 `tests/test_atr.py`（15 测试，100% 通过）
 - ✅ 向后兼容：`use_atr_stop=False` 时行为与 v0.2.0 完全一致
 - ✅ 数据与配置解耦（ATR 在 app.py 计算并传入）
+- ✅ `metrics.py` 新增 ATR 统计指标（stop_loss_rate/take_profit_rate）
+- ✅ `plot.py` 可选绘制 ATR 止损/止盈线 + 触发点标记
+- ✅ `app.py` 侧边栏添加 ATR 配置控件 + 统计卡片
+- ✅ 集成测试验证（42 测试 100% 通过）
+- ✅ `@st.cache_data` 数据缓存启用（TTL=1小时）
+- ✅ 测试覆盖率 58%
+- ✅ 多个 bug 修复（datetime解析/matplotlib兼容/Streamlit警告）
 
-**待完成**:
-- ⏳ `metrics.py` 新增 ATR 统计指标
-- ⏳ `plot.py` 可选绘制 ATR 止损/止盈线
-- ⏳ `app.py` 侧边栏添加 ATR 配置控件
-- ⏳ 集成测试验证（完整 suite 运行）
-- ⏳ 文档更新（README/ROADMAP 标记）
-
-**预计剩余工时**: 1.5 小时
-**优先级**: 🔥 高
+**里程碑**: [x] v0.3.0 完成
 
 ---
 

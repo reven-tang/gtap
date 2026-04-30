@@ -182,9 +182,20 @@ def main() -> None:
         return
 
     # ========== 数据获取 ==========
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def fetch_stock_data(code, start_date, end_date, frequency, adjustflag, show_quarterly):
+        return get_stock_data(
+            code=code,
+            start_date=start_date,
+            end_date=end_date,
+            frequency=frequency,
+            adjustflag=adjustflag,
+            show_quarterly=show_quarterly,
+        )
+
     with st.spinner(f"正在获取 {config.stock_code} 数据..."):
         try:
-            stock_data = get_stock_data(
+            stock_data = fetch_stock_data(
                 code=config.stock_code,
                 start_date=config.start_date,
                 end_date=config.end_date,
