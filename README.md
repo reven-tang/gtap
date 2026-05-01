@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-141%20passed-green)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](PROGRESS.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue)](PROGRESS.md)
 
 </div>
 
@@ -223,7 +223,7 @@ N = 格数量
 | 📊 **多仓位模式** | 固定股数/固定金额/比例仓位 | 凯利准则仓位管理 |
 | 📐 **双网格间距** | 等差/等比网格 | 波动率适配 |
 | 🛡️ **ATR止损止盈** | 基于平均真实波幅动态止损 | 波动率自适应 |
-| 📈 **自动网格范围** | ATR自动计算上下限 | 减少手动参数依赖 |
+| 📈 **自动网格范围** | ATR自动计算上下限（默认开启） | 减少手动参数依赖 |
 | 🔄 **清仓重建仓** | 价格回到范围时自动重建 | 防止永久退出市场 |
 | 📊 **多资产组合** | 2+资产组合回测+相关性分析 | Parrondo效应验证 |
 | 🎲 **Parrondo模拟** | 验证悖论效应与网格交易关联 | 理论探索 |
@@ -231,6 +231,9 @@ N = 格数量
 | 📊 **完整指标** | 夏普/Sortino/Calmar/最大回撤/再平衡溢价 | 全面绩效评估 |
 | 🌐 **3数据源** | BaoStock(A股)/YFinance(港美股)/AkShare(A股增强) | 多市场覆盖 |
 | 💾 **本地数据仓库** | DuckDB列式存储，增量更新，秒级二次加载 | 解决数据清理+大跨度慢问题 |
+| 📊 **BH对比图** | 策略 vs 买入持有曲线 + 溢价面积图 | 再平衡溢价可视化 |
+| 🗂️ **Tab结果页** | 总览/K线/交易明细/香农解读 | 信息分门别类 |
+| ⚡ **快速预设** | 香农经典/保守蓝筹/激进震荡三档 | 新手秒上手 |
 
 ---
 
