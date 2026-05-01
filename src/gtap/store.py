@@ -200,34 +200,50 @@ class DataStore:
     ) -> List[Tuple[str, str]]:
         """找出本地仓库中缺失的日期区间。
 
-        策略：基于 stock_meta 的 first_date/last_date 判断覆盖范围。
-        如果本地数据的 last_date >= end_date 且 first_date <= start_date，
-        则认为无缺口（即使中间有节假日空缺，那是正常的——非交易日无数据）。
+        策略：
+        1. 先基于 stock_meta 判断整体覆盖范围
+        2. 然后检查实际数据的连续性（中间空洞检测）
+        3. 如果 meta 不覆盖请求范围，或中间有空洞，返回缺口
         """
-        try:
-            meta = self.conn.execute(
-                "SELECT first_date, last_date FROM stock_meta WHERE code = ?",
-                [code],
-            ).fetchone()
-        except Exception:
-            meta = None
+        # 查出本地实际数据
+        local_df = self.get_kline(code, start_date, end_date)
 
-        if meta is None:
-            # 本地完全没有该股票数据
-            return [(start_date, end_date)]
+        if local_df.empty:
+            return [(start_date, end_date)]  # 完全缺失
 
-        local_first, local_last = meta
+        # 检查覆盖度：数据范围是否覆盖请求范围
+        local_start = local_df.index[0].strftime("%Y-%m-%d")
+        local_end = local_df.index[-1].strftime("%Y-%m-%d")
 
-        # 本地数据覆盖了请求范围 → 无缺口
-        if str(local_first) <= start_date and str(local_last) >= end_date:
-            return []
-
-        # 计算缺口
         gaps = []
-        if str(local_first) > start_date:
-            gaps.append((start_date, str(local_first)))
-        if str(local_last) < end_date:
-            gaps.append((str(local_last), end_date))
+
+        # 前端缺失
+        if local_start > start_date:
+            gaps.append((start_date, local_start))
+
+        # 后端缺失
+        if local_end < end_date:
+            gaps.append((local_end, end_date))
+
+        # 中间空洞检测：连续交易日间隔 > 5 天可能有缺失
+        dates = local_df.index
+        for i in range(1, len(dates)):
+            gap_days = (dates[i] - dates[i-1]).days
+            # 10天以上的间隔才是数据缺失
+            # 中国最长假期春节约9天+周末=10-11天
+            # 正常周末2-3天，清明/劳动节/端午4-5天
+            if gap_days > 12:
+                # 这是中间空洞
+                gap_start = dates[i-1].strftime("%Y-%m-%d")
+                gap_end = dates[i].strftime("%Y-%m-%d")
+                # 检查是否已被前端/后端缺口覆盖
+                already_covered = False
+                for gs, ge in gaps:
+                    if gap_start >= gs and gap_end <= ge:
+                        already_covered = True
+                        break
+                if not already_covered:
+                    gaps.append((gap_start, gap_end))
 
         return gaps
 

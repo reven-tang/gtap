@@ -40,7 +40,7 @@ def _smart_fetch_kline(
     end_date: str,
     frequency: str,
     adjustflag: str,
-    data_source: str,
+    provider,  # DataProvider instance (not data_source string)
     store: DataStore,
     progress_callback: Optional[Callable] = None,
 ) -> pd.DataFrame:
@@ -55,7 +55,6 @@ def _smart_fetch_kline(
         # 分钟数据直接从 API 拉
         if progress_callback:
             progress_callback("获取分钟级数据...", 50)
-        provider = get_provider(data_source)
         return provider.fetch_kline(
             code=normalized_code,
             start_date=start_date,
@@ -66,7 +65,6 @@ def _smart_fetch_kline(
 
     # 日线及以上 → 走本地仓库 + 增量更新
     def remote_fetch(c: str, s: str, e: str) -> pd.DataFrame:
-        provider = get_provider(data_source)
         return provider.fetch_kline(
             code=c,
             start_date=s,
@@ -135,7 +133,7 @@ def get_stock_data(
                     end_date=end_date,
                     frequency=frequency,
                     adjustflag=adjustflag,
-                    data_source=data_source,
+                    provider=provider,  # 传入已有 provider，不再新建
                     store=store,
                     progress_callback=progress_callback,
                 )

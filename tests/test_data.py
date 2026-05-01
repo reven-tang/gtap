@@ -70,7 +70,7 @@ class TestGetStockData:
         smart_args = mock_smart_fetch.call_args[1]
         assert smart_args["code"] == "AAPL"
         assert smart_args["normalized_code"] == "sh.600000"
-        assert smart_args["data_source"] == "yfinance"
+        assert smart_args["provider"] == provider  # 传入已有 provider
         assert smart_args["frequency"] == "d"
         assert smart_args["adjustflag"] == "1"
         assert isinstance(result, StockData)
