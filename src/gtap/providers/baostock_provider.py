@@ -67,6 +67,8 @@ class BaoStockProvider(DataProvider):
             kline_df = pd.DataFrame(kline_list, columns=rs.fields)
 
             # 数据清洗
+            # 空字符串 → NaN（BaoStock 停牌日/未更新数据会返回空字符串）
+            kline_df = kline_df.replace('', pd.NA)
             if not kline_df.empty:
                 if is_intraday:
                     # 分钟线: 拼接 date + time
@@ -84,7 +86,9 @@ class BaoStockProvider(DataProvider):
                 kline_df = kline_df.set_index("datetime")
 
                 numeric_cols = ["open", "high", "low", "close", "volume"]
-                kline_df[numeric_cols] = kline_df[numeric_cols].astype(float)
+                kline_df[numeric_cols] = kline_df[numeric_cols].astype(float, errors="ignore")
+                # 停牌日的空值行（volume/close 为 NaN）→ 过滤掉
+                kline_df = kline_df.dropna(subset=["close", "volume"])
 
             return kline_df
 
