@@ -138,13 +138,15 @@ def plot_kline(
     return fig
 
 
-def plot_asset_curve(data_index: pd.DatetimeIndex, asset_values: list[float]) -> go.Figure:
+def plot_asset_curve(data_index: pd.DatetimeIndex, asset_values: list[float],
+                    bh_values: Optional[list[float]] = None) -> go.Figure:
     """
-    绘制资产价值变化曲线。
+    绘制资产价值变化曲线，可选对比买入持有(BH)基准。
 
     Args:
         data_index: 时间索引
-        asset_values: 资产价值序列
+        asset_values: 策略资产价值序列
+        bh_values: 买入持有资产价值序列（可选）
 
     Returns:
         Plotly Figure 对象
@@ -153,8 +155,27 @@ def plot_asset_curve(data_index: pd.DatetimeIndex, asset_values: list[float]) ->
         raise ValueError("时间索引与资产价值长度不一致")
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data_index, y=asset_values, mode="lines", name="资产价值"))
-    fig.update_layout(title="资产价值变化", xaxis_title="时间", yaxis_title="资产价值（元）")
+    fig.add_trace(go.Scatter(x=data_index, y=asset_values, mode="lines",
+                             name="再平衡策略", line=dict(color="#2563EB", width=2)))
+
+    if bh_values is not None:
+        if len(data_index) != len(bh_values):
+            raise ValueError("时间索引与BH资产价值长度不一致")
+        fig.add_trace(go.Scatter(x=data_index, y=bh_values, mode="lines",
+                                 name="买入持有(BH)", line=dict(color="#94A3B8", width=2, dash="dash")))
+
+        # 再平衡溢价面积图
+        premium = [s - b for s, b in zip(asset_values, bh_values)]
+        fig.add_trace(go.Scatter(x=data_index, y=premium, mode="lines",
+                                 name="再平衡溢价", fill="tozeroy",
+                                 line=dict(color="#10B981", width=1),
+                                 fillcolor="rgba(16,185,129,0.15)"))
+
+    fig.update_layout(
+        title="资产价值变化" if bh_values is None else "策略 vs 买入持有",
+        xaxis_title="时间", yaxis_title="资产价值（元）",
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+    )
     return fig
 
 

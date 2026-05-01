@@ -447,10 +447,27 @@ def main() -> None:
     } for t in result.trades])
     st.dataframe(trades_df, width='stretch', height=400)
 
-    # ===== 资产曲线 =====
-    st.subheader("📈 资产价值变化")
-    fig_asset = plot_asset_curve(data.index, result.asset_values)
+    # ===== 资产曲线 vs BH对比 =====
+    st.subheader("📈 策略 vs 买入持有")
+    # 计算买入持有资产曲线
+    initial_cash = config.total_investment
+    initial_price = data["close"].iloc[0]
+    bh_shares = int(initial_cash / initial_price / 100) * 100  # A股100股整数
+    bh_cash = initial_cash - bh_shares * initial_price
+    bh_values = [bh_shares * p + bh_cash for p in data["close"]]
+    fig_asset = plot_asset_curve(data.index, result.asset_values, bh_values=bh_values)
     st.plotly_chart(fig_asset, width='stretch')
+
+    # BH对比指标
+    bh_final = bh_values[-1]
+    strategy_final = result.asset_values[-1]
+    premium_pct = ((strategy_final - bh_final) / initial_cash) * 100
+    col_bh1, col_bh2, col_bh3 = st.columns(3)
+    col_bh1.metric("买入持有终值", f"¥{bh_final:,.2f}")
+    col_bh2.metric("策略终值", f"¥{strategy_final:,.2f}")
+    delta_val = strategy_final - bh_final
+    col_bh3.metric("再平衡溢价", f"{premium_pct:+.2f}%",
+                   delta=f"¥{delta_val:+,.2f}" if delta_val != 0 else None)
 
     # ===== 绩效指标 =====
     st.subheader("📊 绩效指标")
