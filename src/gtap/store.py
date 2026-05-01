@@ -37,8 +37,16 @@ class DataStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: Optional[duckdb.DuckDBPyConnection] = None
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
     @property
     def conn(self) -> duckdb.DuckDBPyConnection:
+        """获取连接（懒加载，用完需手动 close 或用 context manager）"""
         if self._conn is None:
             self._conn = duckdb.connect(str(self.db_path))
             self._ensure_tables()
