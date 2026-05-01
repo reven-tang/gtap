@@ -47,12 +47,14 @@ class TestGetStockData:
         provider.normalize_code.assert_called_once_with("sh.601398")
         provider.fetch_kline.assert_called_once()
 
+    @patch("src.gtap.data._smart_fetch_kline")
     @patch("src.gtap.data.get_provider")
-    def test_get_stock_data_passes_parameters_to_provider(self, mock_get_provider):
+    def test_get_stock_data_passes_parameters_to_provider(self, mock_get_provider, mock_smart_fetch):
         """测试 data_source 参数正确传递给 factory"""
         kline = _make_kline_df("2024-01-01")
         provider = _make_mock_provider(kline_df=kline)
         mock_get_provider.return_value = provider
+        mock_smart_fetch.return_value = kline
 
         result = get_stock_data(
             "AAPL", "2024-01-01", "2024-01-31",
@@ -63,13 +65,14 @@ class TestGetStockData:
         # get_provider may be called multiple times (auto_frequency + main fetch)
         mock_get_provider.assert_called_with("yfinance")
         provider.normalize_code.assert_called_with("AAPL")
-        provider.fetch_kline.assert_called_with(
-            code="sh.600000",
-            start_date="2024-01-02",
-            end_date="2024-01-31",
-            frequency="d",
-            adjustflag="1",
-        )
+        # _smart_fetch_kline 被调用，参数正确传递
+        mock_smart_fetch.assert_called_once()
+        smart_args = mock_smart_fetch.call_args[1]
+        assert smart_args["code"] == "AAPL"
+        assert smart_args["normalized_code"] == "sh.600000"
+        assert smart_args["data_source"] == "yfinance"
+        assert smart_args["frequency"] == "d"
+        assert smart_args["adjustflag"] == "1"
         assert isinstance(result, StockData)
         assert not result.kline.empty
 
@@ -102,12 +105,14 @@ class TestGetStockData:
         assert hasattr(data_module, "get_stock_data")
         assert hasattr(data_module, "StockData")
 
+    @patch("src.gtap.data.get_store")
     @patch("src.gtap.data.get_provider")
-    def test_datetime_parsing_for_daily_frequency(self, mock_get_provider):
+    def test_datetime_parsing_for_daily_frequency(self, mock_get_provider, mock_get_store):
         """测试日线频率的 datetime 正确处理"""
         kline = _make_kline_df("2025-01-02 00:00:00")
         provider = _make_mock_provider(kline_df=kline)
         mock_get_provider.return_value = provider
+        mock_get_store.return_value = None  # 绕过 store，直接走 provider
 
         result = get_stock_data("sh.600000", "2025-01-02", "2025-01-02",
                                 frequency="d", show_quarterly=False)

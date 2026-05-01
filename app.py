@@ -375,11 +375,24 @@ def main() -> None:
         return
 
     progress_placeholder.empty()
-    status_placeholder.success(
-        f"✅ 数据就绪：{len(data)} 条记录 "
-        f"({data.index[0].strftime('%Y-%m-%d') if hasattr(data.index[0], 'strftime') else str(data.index[0])} "
-        f"~ {data.index[-1].strftime('%Y-%m-%d') if hasattr(data.index[-1], 'strftime') else str(data.index[-1])})"
-    )
+    data_start = data.index[0]
+    data_end = data.index[-1]
+    fmt = lambda d: d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)
+    
+    # 检查数据覆盖范围是否充分
+    requested_days = (pd.Timestamp(config.end_date) - pd.Timestamp(config.start_date)).days
+    covered_days = (data_end - data_start).days
+    coverage = covered_days / max(requested_days, 1) * 100
+    
+    if coverage < 80:
+        status_placeholder.warning(
+            f"⚠️ 数据仅覆盖 {fmt(data_start)} ~ {fmt(data_end)} "
+            f"({coverage:.0f}%)，请求范围为 {config.start_date} ~ {config.end_date}"
+        )
+    else:
+        status_placeholder.success(
+            f"✅ 数据就绪：{len(data)} 条记录 ({fmt(data_start)} ~ {fmt(data_end)})"
+        )
 
     # ===== ATR 计算 =====
     atr_series = None
@@ -499,6 +512,18 @@ def main() -> None:
         st.plotly_chart(fig_kline, width='stretch')
 
     with tab_trades:
+        trades_df = pd.DataFrame([{
+            "操作": t.action,
+            "时间": t.timestamp,
+            "价格": f"{t.price:.2f}",
+            "数量": t.shares,
+            "持股总数": t.total_shares,
+            "佣金": f"{t.commission:.2f}",
+            "过户费": f"{t.transfer_fee:.2f}",
+            "印花税": f"{t.stamp_duty:.2f}",
+            "总费用": f"{t.total_fee:.2f}",
+            "持仓均价": f"{t.avg_price:.2f}",
+        } for t in result.trades])
         st.dataframe(trades_df, width='stretch', height=500)
 
     with tab_insight:
