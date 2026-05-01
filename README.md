@@ -377,6 +377,6 @@ MIT License — 详见 [LICENSE](LICENSE)
 
 **波动不是敌人，是未被收割的收益。**
 
-🦀
+*Made by 萨莉*
 
 </div>

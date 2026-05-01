@@ -319,8 +319,5 @@ _store: Optional[DataStore] = None
 
 
 def get_store(db_path: str | Path | None = None) -> DataStore:
-    """获取全局 DataStore 单例"""
-    global _store
-    if _store is None:
-        _store = DataStore(db_path)
-    return _store
+    """获取 DataStore 实例（每次新建，避免连接泄漏）"""
+    return DataStore(db_path)

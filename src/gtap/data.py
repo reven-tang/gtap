@@ -126,99 +126,104 @@ def get_stock_data(
         normalized_code = provider.normalize_code(code)
         store = get_store() if use_local_store else None
 
-        # K线数据（走智能缓存）
-        if store and use_local_store:
-            kline_df = _smart_fetch_kline(
-                code=code,
-                normalized_code=normalized_code,
-                start_date=start_date,
-                end_date=end_date,
-                frequency=frequency,
-                adjustflag=adjustflag,
-                data_source=data_source,
-                store=store,
-                progress_callback=progress_callback,
+        try:
+            # K线数据（走智能缓存）
+            if store and use_local_store:
+                kline_df = _smart_fetch_kline(
+                    code=code,
+                    normalized_code=normalized_code,
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency=frequency,
+                    adjustflag=adjustflag,
+                    data_source=data_source,
+                    store=store,
+                    progress_callback=progress_callback,
+                )
+            else:
+                kline_df = provider.fetch_kline(
+                    code=normalized_code,
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency=frequency,
+                    adjustflag=adjustflag,
+                )
+
+            # 除权除息
+            dividend_df = provider.fetch_dividend(normalized_code)
+
+            # 基本资料
+            stock_basic_df = provider.fetch_basic(normalized_code)
+
+            # 季频财务数据（仅 baostock 支持）
+            empty_df = pd.DataFrame()
+            profit_df = empty_df
+            operation_df = empty_df
+            growth_df = empty_df
+            balance_df = empty_df
+            cash_flow_df = empty_df
+            dupont_df = empty_df
+            performance_express_df = empty_df
+            forecast_df = empty_df
+
+            if show_quarterly and data_source == "baostock":
+                import baostock as bs
+                bs.login()
+                year = start_date[:4]
+
+                def _fetch_baostock_table(query_fn, code, year, quarter="1"):
+                    rs = query_fn(code=code, year=year, quarter=quarter)
+                    rows = []
+                    while rs.error_code == "0" and rs.next():
+                        rows.append(rs.get_row_data())
+                    return pd.DataFrame(rows, columns=rs.fields) if rows else pd.DataFrame()
+
+                profit_df = _fetch_baostock_table(bs.query_profit_data, normalized_code, year)
+                operation_df = _fetch_baostock_table(bs.query_operation_data, normalized_code, year)
+                growth_df = _fetch_baostock_table(bs.query_growth_data, normalized_code, year)
+                balance_df = _fetch_baostock_table(bs.query_balance_data, normalized_code, year)
+                cash_flow_df = _fetch_baostock_table(bs.query_cash_flow_data, normalized_code, year)
+                dupont_df = _fetch_baostock_table(bs.query_dupont_data, normalized_code, year)
+
+                rs_perf = bs.query_performance_express_report(
+                    code=normalized_code, start_date=start_date, end_date=end_date
+                )
+                perf_rows = []
+                while rs_perf.error_code == "0" and rs_perf.next():
+                    perf_rows.append(rs_perf.get_row_data())
+                performance_express_df = pd.DataFrame(
+                    perf_rows, columns=rs_perf.fields
+                ) if perf_rows else pd.DataFrame()
+
+                rs_forecast = bs.query_forecast_report(
+                    code=normalized_code, start_date=start_date, end_date=end_date
+                )
+                forecast_rows = []
+                while rs_forecast.error_code == "0" and rs_forecast.next():
+                    forecast_rows.append(rs_forecast.get_row_data())
+                forecast_df = pd.DataFrame(
+                    forecast_rows, columns=rs_forecast.fields
+                ) if forecast_rows else pd.DataFrame()
+
+                bs.logout()
+
+            return StockData(
+                kline=kline_df,
+                dividend=dividend_df,
+                stock_basic=stock_basic_df,
+                profit=profit_df,
+                operation=operation_df,
+                growth=growth_df,
+                balance=balance_df,
+                cash_flow=cash_flow_df,
+                dupont=dupont_df,
+                performance_express=performance_express_df,
+                forecast=forecast_df,
             )
-        else:
-            kline_df = provider.fetch_kline(
-                code=normalized_code,
-                start_date=start_date,
-                end_date=end_date,
-                frequency=frequency,
-                adjustflag=adjustflag,
-            )
 
-        # 除权除息
-        dividend_df = provider.fetch_dividend(normalized_code)
-
-        # 基本资料
-        stock_basic_df = provider.fetch_basic(normalized_code)
-
-        # 季频财务数据（仅 baostock 支持）
-        empty_df = pd.DataFrame()
-        profit_df = empty_df
-        operation_df = empty_df
-        growth_df = empty_df
-        balance_df = empty_df
-        cash_flow_df = empty_df
-        dupont_df = empty_df
-        performance_express_df = empty_df
-        forecast_df = empty_df
-
-        if show_quarterly and data_source == "baostock":
-            import baostock as bs
-            bs.login()
-            year = start_date[:4]
-
-            def _fetch_baostock_table(query_fn, code, year, quarter="1"):
-                rs = query_fn(code=code, year=year, quarter=quarter)
-                rows = []
-                while rs.error_code == "0" and rs.next():
-                    rows.append(rs.get_row_data())
-                return pd.DataFrame(rows, columns=rs.fields) if rows else pd.DataFrame()
-
-            profit_df = _fetch_baostock_table(bs.query_profit_data, normalized_code, year)
-            operation_df = _fetch_baostock_table(bs.query_operation_data, normalized_code, year)
-            growth_df = _fetch_baostock_table(bs.query_growth_data, normalized_code, year)
-            balance_df = _fetch_baostock_table(bs.query_balance_data, normalized_code, year)
-            cash_flow_df = _fetch_baostock_table(bs.query_cash_flow_data, normalized_code, year)
-            dupont_df = _fetch_baostock_table(bs.query_dupont_data, normalized_code, year)
-
-            rs_perf = bs.query_performance_express_report(
-                code=normalized_code, start_date=start_date, end_date=end_date
-            )
-            perf_rows = []
-            while rs_perf.error_code == "0" and rs_perf.next():
-                perf_rows.append(rs_perf.get_row_data())
-            performance_express_df = pd.DataFrame(
-                perf_rows, columns=rs_perf.fields
-            ) if perf_rows else pd.DataFrame()
-
-            rs_forecast = bs.query_forecast_report(
-                code=normalized_code, start_date=start_date, end_date=end_date
-            )
-            forecast_rows = []
-            while rs_forecast.error_code == "0" and rs_forecast.next():
-                forecast_rows.append(rs_forecast.get_row_data())
-            forecast_df = pd.DataFrame(
-                forecast_rows, columns=rs_forecast.fields
-            ) if forecast_rows else pd.DataFrame()
-
-            bs.logout()
-
-        return StockData(
-            kline=kline_df,
-            dividend=dividend_df,
-            stock_basic=stock_basic_df,
-            profit=profit_df,
-            operation=operation_df,
-            growth=growth_df,
-            balance=balance_df,
-            cash_flow=cash_flow_df,
-            dupont=dupont_df,
-            performance_express=performance_express_df,
-            forecast=forecast_df,
-        )
+        finally:
+            if store:
+                store.close()
 
     except DataFetchError:
         raise
