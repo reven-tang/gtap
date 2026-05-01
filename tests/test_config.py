@@ -15,9 +15,9 @@ class TestGridTradingConfig:
         assert config.grid_number >= 2
 
     def test_invalid_grid_range(self):
-        """测试网格上限小于等于下限"""
+        """测试网格上限小于等于下限（手动模式下）"""
         with pytest.raises(ConfigError, match="网格上限必须大于网格下限"):
-            GridTradingConfig(grid_upper=4.0, grid_lower=6.0)
+            GridTradingConfig(grid_upper=4.0, grid_lower=6.0, auto_grid_range=False)
 
     def test_invalid_grid_number(self):
         """测试网格数量小于 2"""
@@ -61,7 +61,14 @@ class TestGridTradingConfig:
         config = GridTradingConfig()
         assert config.grid_number == 10
         assert config.initial_shares == 100
+        assert config.grid_upper == 12.0
+        assert config.grid_lower == 8.0
         assert config.total_investment == 200000.0
+        assert config.frequency == "d"
+        assert config.strategy_mode == "rebalance_threshold"
+        assert config.auto_grid_range is True
+        assert config.position_mode == "proportional"
+        assert config.grid_spacing_mode == "geometric"
         assert config.commission_rate == 0.0003
         assert config.data_source == "baostock"
 

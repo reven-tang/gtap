@@ -60,11 +60,12 @@ class TestGetStockData:
             data_source="yfinance",
         )
 
-        mock_get_provider.assert_called_once_with("yfinance")
-        provider.normalize_code.assert_called_once_with("AAPL")
-        provider.fetch_kline.assert_called_once_with(
+        # get_provider may be called multiple times (auto_frequency + main fetch)
+        mock_get_provider.assert_called_with("yfinance")
+        provider.normalize_code.assert_called_with("AAPL")
+        provider.fetch_kline.assert_called_with(
             code="sh.600000",
-            start_date="2024-01-01",
+            start_date="2024-01-02",
             end_date="2024-01-31",
             frequency="d",
             adjustflag="1",

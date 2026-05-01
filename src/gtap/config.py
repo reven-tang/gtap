@@ -22,29 +22,29 @@ class GridTradingConfig:
     end_date: str = "2024-12-31"
 
     # 网格参数
-    grid_upper: float = 6.0
-    grid_lower: float = 4.0
+    grid_upper: float = 12.0  # 默认值仅作占位，auto_grid_range=True 时自动覆盖
+    grid_lower: float = 8.0   # 默认值仅作占位，auto_grid_range=True 时自动覆盖
     grid_number: int = 10
     grid_center: Optional[float] = None  # None = 自动（起始日收盘价）
     shares_per_grid: int = 100
     initial_shares: int = 100
     total_investment: float = 200000.0
 
-    # 网格范围自动计算（P0-3）
-    auto_grid_range: bool = False  # 是否基于 ATR 自动计算网格范围
+    # 网格范围自动计算（P0-3）—— 默认开启，基于 ATR 自动适配
+    auto_grid_range: bool = True  # 香农策略核心：网格范围应跟随数据波动
     grid_range_atr_multiplier: float = 2.0  # ATR × 此倍数 = 网格偏移量
 
-    # 策略模式（P1-4）
-    strategy_mode: Literal["grid", "rebalance_threshold", "rebalance_periodic"] = "grid"
+    # 策略模式（P1-4）—— 香农再平衡是核心策略，默认启用
+    strategy_mode: Literal["grid", "rebalance_threshold", "rebalance_periodic"] = "rebalance_threshold"
     target_allocation: float = 0.5  # 目标股票配置比例（再平衡模式核心参数）
     rebalance_threshold: float = 0.05  # 偏离目标比例多少时触发再平衡
 
-    # 仓位管理模式（P1-5）
-    position_mode: Literal["fixed_shares", "fixed_amount", "proportional"] = "fixed_shares"
+    # 仓位管理模式（P1-5）—— 再平衡模式下 proportional 更合理
+    position_mode: Literal["fixed_shares", "fixed_amount", "proportional"] = "proportional"
     amount_per_grid: float = 1000.0  # fixed_amount 模式下每格交易金额
 
-    # 网格间距模式（P1-6）
-    grid_spacing_mode: Literal["arithmetic", "geometric"] = "arithmetic"
+    # 网格间距模式（P1-6）—— 香农策略更适合等比网格
+    grid_spacing_mode: Literal["arithmetic", "geometric"] = "geometric"
 
     # 交易费用（A股标准）
     commission_rate: float = 0.0003      # 佣金费率（默认 0.03%，最低 5 元）
@@ -53,7 +53,7 @@ class GridTradingConfig:
 
     # 数据源选项
     data_source: Literal["baostock", "yfinance", "akshare"] = "baostock"  # 数据源
-    frequency: Literal["5", "15", "30", "60", "d", "w", "m"] = "5"  # K线频率
+    frequency: Literal["5", "15", "30", "60", "d", "w", "m"] = "d"  # K线频率 — 默认日线，香农策略适用日频数据
     adjustflag: Literal["1", "2", "3"] = "3"  # 复权类型 1:前复权 2:后复权 3:不复权
     show_quarterly_data: bool = False  # 是否显示季频财务数据
 
@@ -69,7 +69,8 @@ class GridTradingConfig:
 
     def _validate(self) -> None:
         """验证配置参数的有效性"""
-        if self.grid_upper <= self.grid_lower:
+        # auto_grid_range=True 时，grid_upper/lower 只是占位值，跳过范围验证
+        if not self.auto_grid_range and self.grid_upper <= self.grid_lower:
             raise ConfigError("网格上限必须大于网格下限")
 
         if self.grid_number < 2:

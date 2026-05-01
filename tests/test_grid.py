@@ -27,6 +27,10 @@ def make_sample_data() -> pd.DataFrame:
 def make_config(**overrides) -> GridTradingConfig:
     """创建标准测试配置（grid_center=5.0，与 make_sample_data 起始价一致）"""
     defaults = {
+        "strategy_mode": "grid",  # 测试默认用经典网格
+        "auto_grid_range": False,  # 测试默认手动网格范围
+        "position_mode": "fixed_shares",  # 测试默认固定股数
+        "grid_spacing_mode": "arithmetic",  # 测试默认等差
         "grid_upper": 6.0,
         "grid_lower": 4.0,
         "grid_number": 5,
@@ -278,7 +282,9 @@ class TestGridTrading:
     def test_auto_entry_price_from_data(self):
         """测试 P0-1: 购入价自动从起始日收盘价获取"""
         data = make_sample_data()  # 起始价 5.0
-        config = GridTradingConfig(grid_center=5.0, grid_number=5)
+        config = GridTradingConfig(grid_center=5.0, grid_upper=6.0, grid_lower=4.0,
+                                   grid_number=5, auto_grid_range=False,
+                                   strategy_mode="grid", position_mode="fixed_shares")
         result = grid_trading(data, config)
         # 第一笔交易的 price 应等于起始日收盘价 5.0
         assert result.trades[0].price == 5.0
@@ -319,12 +325,14 @@ class TestGridTrading:
         assert isinstance(result, GridTradingResult)
         assert len(result.trades) >= 1
 
-    def test_auto_grid_range_without_atr_raises(self):
-        """测试 P0-3: 自动网格范围但没有 ATR 应报错"""
+    def test_auto_grid_range_without_atr_fallback(self):
+        """测试 P0-3: 自动网格范围没有 ATR 时，自动 fallback 到标准差计算"""
         data = make_sample_data()
         config = GridTradingConfig(auto_grid_range=True)
-        with pytest.raises(GridTradingError, match="需要传入 atr_series"):
-            grid_trading(data, config)
+        # 不再报错，而是用标准差 fallback
+        result = grid_trading(data, config)
+        assert len(result.asset_values) > 0
+        assert result.total_buy_count + result.total_sell_count > 0
 
     def test_rebalance_threshold_mode(self):
         """测试 P1-4: 阈值再平衡模式"""

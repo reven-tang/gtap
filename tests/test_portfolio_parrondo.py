@@ -11,6 +11,7 @@ from src.gtap.portfolio import (
     portfolio_backtest,
     PortfolioError,
 )
+from src.gtap.config import GridTradingConfig
 from src.gtap.parrondo import (
     ParrondoConfig,
     ParrondoResult,
@@ -76,8 +77,20 @@ class TestPortfolioBacktest:
 
         cfg = PortfolioConfig(
             assets=[
-                PortfolioAssetConfig(stock_code="sh.601398", target_weight=0.6),
-                PortfolioAssetConfig(stock_code="sz.000001", target_weight=0.4),
+                PortfolioAssetConfig(stock_code="sh.601398", target_weight=0.6,
+                    grid_config=GridTradingConfig(
+                        grid_upper=6.0, grid_lower=4.0, grid_number=5, grid_center=5.0,
+                        auto_grid_range=False, strategy_mode="grid",
+                        position_mode="fixed_shares", grid_spacing_mode="arithmetic",
+                        frequency="d", adjustflag="1",
+                    )),
+                PortfolioAssetConfig(stock_code="sz.000001", target_weight=0.4,
+                    grid_config=GridTradingConfig(
+                        grid_upper=4.0, grid_lower=2.0, grid_number=5, grid_center=3.0,
+                        auto_grid_range=False, strategy_mode="grid",
+                        position_mode="fixed_shares", grid_spacing_mode="arithmetic",
+                        frequency="d", adjustflag="1",
+                    )),
             ],
             total_investment=5000.0,
         )
@@ -107,8 +120,22 @@ class TestPortfolioBacktest:
 
         cfg = PortfolioConfig(
             assets=[
-                PortfolioAssetConfig(stock_code="sh.601398", target_weight=0.5),
-                PortfolioAssetConfig(stock_code="sz.000001", target_weight=0.5),
+                PortfolioAssetConfig(stock_code="sh.601398", target_weight=0.5,
+                    grid_config=GridTradingConfig(
+                        grid_upper=6.0, grid_lower=4.0, grid_number=5, grid_center=5.0,
+                        auto_grid_range=False, strategy_mode="grid",
+                        position_mode="fixed_shares", grid_spacing_mode="arithmetic",
+                        frequency="d", adjustflag="1",
+                        total_investment=2500.0,
+                    )),
+                PortfolioAssetConfig(stock_code="sz.000001", target_weight=0.5,
+                    grid_config=GridTradingConfig(
+                        grid_upper=4.0, grid_lower=2.0, grid_number=5, grid_center=3.0,
+                        auto_grid_range=False, strategy_mode="grid",
+                        position_mode="fixed_shares", grid_spacing_mode="arithmetic",
+                        frequency="d", adjustflag="1",
+                        total_investment=2500.0,
+                    )),
             ],
             total_investment=5000.0,
         )
@@ -126,8 +153,20 @@ class TestPortfolioBacktest:
 
         cfg = PortfolioConfig(
             assets=[
-                PortfolioAssetConfig(stock_code="sh.601398", target_weight=0.5),
-                PortfolioAssetConfig(stock_code="sz.000001", target_weight=0.5),
+                PortfolioAssetConfig(stock_code="sh.601398", target_weight=0.5,
+                    grid_config=GridTradingConfig(
+                        grid_upper=6.0, grid_lower=4.0, grid_number=5, grid_center=5.0,
+                        auto_grid_range=False, strategy_mode="grid",
+                        position_mode="fixed_shares", grid_spacing_mode="arithmetic",
+                        frequency="d", adjustflag="1", total_investment=10000.0,
+                    )),
+                PortfolioAssetConfig(stock_code="sz.000001", target_weight=0.5,
+                    grid_config=GridTradingConfig(
+                        grid_upper=4.0, grid_lower=2.0, grid_number=5, grid_center=3.0,
+                        auto_grid_range=False, strategy_mode="grid",
+                        position_mode="fixed_shares", grid_spacing_mode="arithmetic",
+                        frequency="d", adjustflag="1", total_investment=10000.0,
+                    )),
             ],
         )
         result = portfolio_backtest(cfg, data_dict)

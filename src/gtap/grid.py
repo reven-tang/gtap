@@ -114,9 +114,17 @@ def grid_trading(
                 grid_lower = entry_price - avg_atr * atr_mult
                 grid_upper = entry_price + avg_atr * atr_mult
             else:
-                raise GridTradingError("自动网格范围模式需要有效 ATR 数据")
+                # ATR全NaN → 用数据标准差作为fallback
+                price_std = data["close"].std()
+                atr_mult = config.grid_range_atr_multiplier
+                grid_lower = entry_price - price_std * atr_mult
+                grid_upper = entry_price + price_std * atr_mult
         else:
-            raise GridTradingError("自动网格范围模式需要传入 atr_series")
+            # 无ATR数据 → 用数据标准差作为fallback
+            price_std = data["close"].std()
+            atr_mult = config.grid_range_atr_multiplier
+            grid_lower = entry_price - price_std * atr_mult
+            grid_upper = entry_price + price_std * atr_mult
     else:
         grid_upper = config.grid_upper
         grid_lower = config.grid_lower

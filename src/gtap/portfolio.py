@@ -92,18 +92,27 @@ def portfolio_backtest(
             raise PortfolioError(f"缺少 {code} 的行情数据")
 
         # 为每个资产构建独立的 GridTradingConfig
-        if asset_cfg.grid_config is not None:
-            grid_cfg = asset_cfg.grid_config
-        else:
-            # 默认配置：按权重分配投入
-            investment = portfolio_config.total_investment * asset_cfg.target_weight
-            grid_cfg = GridTradingConfig(
-                stock_code=code,
-                start_date=portfolio_config.start_date,
-                end_date=portfolio_config.end_date,
-                total_investment=investment,
-                data_source=portfolio_config.data_source,
-            )
+        try:
+            if asset_cfg.grid_config is not None:
+                grid_cfg = asset_cfg.grid_config
+            else:
+                # 默认配置：按权重分配投入
+                investment = portfolio_config.total_investment * asset_cfg.target_weight
+                grid_cfg = GridTradingConfig(
+                    stock_code=code,
+                    start_date=portfolio_config.start_date,
+                    end_date=portfolio_config.end_date,
+                    total_investment=investment,
+                    auto_grid_range=False,  # 组合回测不用ATR自动范围
+                    strategy_mode="grid",  # 组合默认用网格策略
+                    position_mode="fixed_shares",  # 组合默认用固定股数
+                    grid_spacing_mode="arithmetic",  # 组合默认等差
+                    frequency="d",  # 组合默认日线
+                    adjustflag="1",  # 组合默认前复权
+                    data_source=portfolio_config.data_source,
+                )
+        except Exception as e:
+            raise PortfolioError("配置错误或数据缺失") from e
 
         # 确保投入金额按权重分配
         grid_cfg = GridTradingConfig(

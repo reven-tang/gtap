@@ -1,7 +1,7 @@
 """
-GTAP 网格交易回测平台 - Streamlit 应用入口
+GTAP — 香农网格交易回测平台
 
-v0.6.0+: DuckDB 本地数据仓库 + 增量更新 + 自动降采样 + 进度反馈
+v0.8.0: 香农策略默认配置 + BH对比 + 自适应网格 + P0配置修正
 """
 
 import streamlit as st
@@ -33,7 +33,7 @@ import pandas as pd
 
 # ========== Streamlit 页面配置 ==========
 st.set_page_config(
-    page_title="GTAP - 网格交易回测平台",
+    page_title="GTAP - 香农网格回测平台",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -44,7 +44,7 @@ st.set_page_config(
 def sidebar_config() -> Tuple[GridTradingConfig, bool]:
     """渲染侧边栏并返回配置对象 + 运行按钮状态"""
 
-    st.sidebar.title("📈 GTAP 回测平台")
+    st.sidebar.title("📈 GTAP 香农回测")
 
     # ========== 基础设置 ==========
     with st.sidebar.expander("🎯 基础设置", expanded=True):
@@ -67,10 +67,10 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
             format_func=lambda x: {"baostock": "BaoStock (A股免费)",
                                    "yfinance": "YFinance (港美股)",
                                    "akshare": "AkShare (A股增强)"}.get(x, x))
-        # P0: 香农理论提示
-st.info("💡 **香农提示**：再平衡可以从波动中创造收益。波动越大，潜在再平衡溢价越高。")
 
-if data_source != "baostock":
+        st.info("💡 **香农提示**：再平衡可以从波动中创造收益。波动越大，潜在再平衡溢价越高。")
+
+        if data_source != "baostock":
             hint = {"yfinance": "A股：600958.SS / 美股：AAPL",
                     "akshare": "纯数字：600958 / 000001"}.get(data_source, "")
             if hint:
@@ -78,75 +78,75 @@ if data_source != "baostock":
 
     # ========== 交易策略 ==========
     with st.sidebar.expander("📊 交易策略", expanded=True):
-        auto_grid_range = st.checkbox("自动网格范围", value=False,
-            help="基于 ATR 自动计算上下限")
+        # 网格范围 —— 默认自动
+        auto_grid_range = st.checkbox("自动网格范围", value=True,
+            help="基于 ATR 自动计算上下限（推荐开启）")
         if auto_grid_range:
             grid_range_mult = st.slider("ATR 乘数", min_value=0.5, max_value=5.0,
-                value=2.0, step=0.1, format="%.1f")
-            grid_upper = st.number_input("网格上限", value=6.0, step=0.01,
-                format="%.2f", disabled=True)
-            grid_lower = st.number_input("网格下限", value=4.0, step=0.01,
-                format="%.2f", disabled=True)
+                value=2.0, step=0.1, format="%.1f",
+                help="ATR × 此值 = 网格上下偏移")
+            grid_upper = st.number_input("网格上限", value=12.0, step=0.01,
+                format="%.2f", disabled=True, help="自动模式下由ATR计算")
+            grid_lower = st.number_input("网格下限", value=8.0, step=0.01,
+                format="%.2f", disabled=True, help="自动模式下由ATR计算")
         else:
             grid_range_mult = 2.0
-            grid_upper = st.number_input("网格上限", value=6.0, step=0.01, format="%.2f")
-            grid_lower = st.number_input("网格下限", value=4.0, step=0.01, format="%.2f")
+            grid_upper = st.number_input("网格上限", value=12.0, step=0.01, format="%.2f")
+            grid_lower = st.number_input("网格下限", value=8.0, step=0.01, format="%.2f")
 
         grid_number = st.number_input("网格数量", value=10, min_value=2, step=1)
         grid_center_manual = st.checkbox("手动设定网格中心",
             value=False, help="默认=起始日收盘价")
-        grid_center = (st.number_input("网格中心", value=5.0, step=0.01, format="%.2f")
+        grid_center = (st.number_input("网格中心", value=10.0, step=0.01, format="%.2f")
                        if grid_center_manual else None)
 
+        # 网格间距 —— 默认等比（香农策略核心）
         grid_spacing_mode = st.selectbox("网格间距",
-            options=["arithmetic", "geometric"],
-            format_func=lambda x: {"arithmetic": "等差间距",
-                                   "geometric": "等比间距"}.get(x, x))
+            options=["geometric", "arithmetic"], index=0,
+            format_func=lambda x: {"geometric": "等比间距（推荐）",
+                                   "arithmetic": "等差间距"}.get(x, x))
 
-        # P0: 策略模式引导 - 基于市场判断推荐
-st.markdown("**🎯 你的市场判断？**")
-market_regime = st.radio("",
-    options=["震荡市", "趋势市", "不确定"],
-    index=0,
-    horizontal=True,
-    label_visibility="collapsed",
-    help="震荡市：价格在区间内波动 | 趋势市：有明显上涨或下跌趋势")
+        # 策略模式引导 —— 市场判断推荐
+        st.markdown("---")
+        st.markdown("**🎯 你的市场判断？**")
+        market_regime = st.radio("市场判断",
+            options=["震荡市", "趋势市", "不确定"],
+            index=1,  # 默认趋势市 → 阈值再平衡
+            horizontal=True,
+            help="震荡市：价格在区间内波动 | 趋势市：有方向性 | 不确定：随机")
 
-# 根据市场判断推荐策略
-regime_to_strategy = {
-    "震荡市": ("grid", "📊 经典网格（推荐）"),
-    "趋势市": ("rebalance_threshold", "⚖️ 阈值再平衡（推荐）"),
-    "不确定": ("rebalance_periodic", "📅 周期再平衡（推荐）"),
-}
-recommended_strategy, recommended_label = regime_to_strategy[market_regime]
+        regime_to_strategy = {
+            "震荡市": ("grid", "📊 经典网格（推荐）"),
+            "趋势市": ("rebalance_threshold", "⚖️ 阈值再平衡（推荐）"),
+            "不确定": ("rebalance_periodic", "📅 周期再平衡（推荐）"),
+        }
+        recommended_strategy, recommended_label = regime_to_strategy[market_regime]
 
-strategy_options = ["grid", "rebalance_threshold", "rebalance_periodic"]
-strategy_labels = {
-    "grid": "📊 经典网格" + (" ✓" if market_regime == "震荡市" else ""),
-    "rebalance_threshold": "⚖️ 阈值再平衡" + (" ✓" if market_regime == "趋势市" else ""),
-    "rebalance_periodic": "📅 周期再平衡" + (" ✓" if market_regime == "不确定" else ""),
-}
+        strategy_options = ["grid", "rebalance_threshold", "rebalance_periodic"]
+        strategy_labels = {
+            "grid": "📊 经典网格" + (" ✓" if market_regime == "震荡市" else ""),
+            "rebalance_threshold": "⚖️ 阈值再平衡" + (" ✓" if market_regime == "趋势市" else ""),
+            "rebalance_periodic": "📅 周期再平衡" + (" ✓" if market_regime == "不确定" else ""),
+        }
 
-current_index = strategy_options.index(recommended_strategy)
-strategy_mode = st.selectbox("策略模式",
-    options=strategy_options,
-    index=current_index,
-    format_func=lambda x: strategy_labels.get(x, x))
+        current_index = strategy_options.index(recommended_strategy)
+        strategy_mode = st.selectbox("策略模式",
+            options=strategy_options,
+            index=current_index,
+            format_func=lambda x: strategy_labels.get(x, x))
 
-# 显示推荐理由
-if strategy_mode == recommended_strategy:
-    st.success(f"💡 {market_regime}推荐此策略：{'低买高卖，频繁收割波动' if market_regime=='震荡市' else '捕捉趋势中的回调，减少过度交易' if market_regime=='趋势市' else '定期再平衡，避免情绪化操作'}")
-else:
-    st.info("💡 切换策略可查看不同推荐")
+        regime_reasons = {
+            "震荡市": "低买高卖，频繁收割波动",
+            "趋势市": "捕捉趋势中的回调，减少过度交易",
+            "不确定": "定期再平衡，避免情绪化操作",
+        }
+        if strategy_mode == recommended_strategy:
+            st.success(f"💡 {market_regime}推荐：{regime_reasons[market_regime]}")
+        else:
+            st.info("💡 已手动切换策略")
 
-        # ========== P0: 理论洞察面板 ==========
-with st.sidebar.expander("🧠 香农理论洞察", expanded=False):
-    st.markdown("**基于当前配置的理论预期**")
-    st.info("💡 数据获取后将显示详细的波动拖累和再平衡溢价分析")
-    st.markdown("---")
-    st.caption("波动不是风险，而是收益来源——前提是有正确的再平衡机制")
-
-if "rebalance" in strategy_mode:
+        # 再平衡参数
+        if "rebalance" in strategy_mode:
             target_allocation = st.slider("目标股票比例", min_value=0.1,
                 max_value=0.9, value=0.5, step=0.05,
                 format_func=lambda x: f"{x*100:.0f}%")
@@ -157,17 +157,19 @@ if "rebalance" in strategy_mode:
             target_allocation = 0.5
             rebalance_threshold = 0.05
 
+        # 仓位模式 —— 默认比例仓位（再平衡更合理）
         position_mode = st.selectbox("仓位模式",
-            options=["fixed_shares", "fixed_amount", "proportional"],
-            format_func=lambda x: {"fixed_shares": "固定股数",
-                                   "fixed_amount": "固定金额",
-                                   "proportional": "比例仓位"}.get(x, x))
+            options=["proportional", "fixed_shares", "fixed_amount"], index=0,
+            format_func=lambda x: {"proportional": "比例仓位（推荐）",
+                                   "fixed_shares": "固定股数",
+                                   "fixed_amount": "固定金额"}.get(x, x))
         if position_mode == "fixed_amount":
             amount_per_grid = st.number_input("每格交易金额", value=1000.0,
                 min_value=1.0, step=100.0, format="%.2f")
         else:
             amount_per_grid = 1000.0
 
+        # ATR止损
         use_atr_stop = st.checkbox("ATR 止损止盈", value=False)
         if use_atr_stop:
             atr_period = st.slider("ATR 周期", min_value=5, max_value=30, value=14)
@@ -178,6 +180,13 @@ if "rebalance" in strategy_mode:
         else:
             atr_period, atr_stop_mult, atr_tp_mult = 14, 1.5, 0.5
 
+    # ========== 理论洞察 ==========
+    with st.sidebar.expander("🧠 香农理论洞察", expanded=False):
+        st.markdown("**基于当前配置的理论预期**")
+        st.info("💡 数据获取后将显示详细的波动拖累和再平衡溢价分析")
+        st.markdown("---")
+        st.caption("波动不是风险，而是收益来源——前提是有正确的再平衡机制")
+
     # ========== 高级设置 ==========
     with st.sidebar.expander("⚙️ 高级设置", expanded=False):
         commission_rate = st.number_input("佣金费率", value=0.0003,
@@ -187,13 +196,8 @@ if "rebalance" in strategy_mode:
         stamp_duty_rate = st.number_input("印花税费率", value=0.001,
             min_value=0.0, format="%.4f", help="卖出0.1%")
 
-        # P1: 自动降采样
+        # 自动降采样 —— 默认开启
         auto_freq = st.checkbox("自动推荐频率", value=True,
-            help="根据时间跨度自动选择最佳 K 线频率")
-
-        # P1: 智能网格推荐
-        if st.checkbox("🎯 智能网格推荐", value=False):
-            st.info("获取数据后将基于ATR自动计算最优网格参数")
             help="根据时间跨度自动选择最佳 K 线频率")
 
         if auto_freq:
@@ -213,17 +217,17 @@ if "rebalance" in strategy_mode:
                 st.caption(f"💡 自动推荐：{freq_hint}")
         else:
             frequency = st.selectbox("K线频率",
-                options=["5", "15", "30", "60", "d", "w", "m"], index=0,
+                options=["5", "15", "30", "60", "d", "w", "m"], index=4,  # 默认日线
                 format_func=lambda x: {
                     "5": "5分钟", "15": "15分钟", "30": "30分钟",
                     "60": "60分钟", "d": "日线", "w": "周线", "m": "月线"}.get(x, x))
 
-        adjustflag = st.selectbox("复权类型", options=["1", "2", "3"], index=2,
+        adjustflag = st.selectbox("复权类型", options=["1", "2", "3"], index=0,  # 默认前复权
             format_func=lambda x: {"1": "前复权", "2": "后复权",
                                    "3": "不复权"}.get(x, x))
         show_quarterly = st.checkbox("季频财务数据", value=False)
 
-        # P0: 本地仓库开关
+        # 本地仓库开关
         use_local_store = st.checkbox("使用本地数据仓库", value=True,
             help="关闭则每次从 API 重新拉取")
         if st.checkbox("📦 查看本地数据概况"):
@@ -279,14 +283,14 @@ if "rebalance" in strategy_mode:
 def main() -> None:
     config, run_button, use_local_store = sidebar_config()
 
-    st.title("📈 GTAP - Grid Trading Analysis Platform")
+    st.title("📈 GTAP — 香农网格交易回测平台")
     st.markdown("---")
 
     if not run_button:
-        st.info("👈 请在左侧边栏配置参数，然后点击「运行网格交易回测」")
+        st.info("👈 请在左侧边栏配置参数，然后点击「▶️ 运行回测」")
         return
 
-    # ===== P1: 进度条数据获取 =====
+    # ===== 进度条数据获取 =====
     progress_placeholder = st.empty()
     status_placeholder = st.empty()
 
@@ -294,7 +298,6 @@ def main() -> None:
     status_placeholder.info("正在连接数据源...")
 
     def streamlit_progress(msg: str, pct: int):
-        """进度回调：同时更新进度条和状态文字"""
         progress_placeholder.progress(min(pct, 100), msg)
         status_placeholder.info(msg)
 
@@ -328,7 +331,6 @@ def main() -> None:
         status_placeholder.error("未获取到数据，请检查股票代码和日期范围")
         return
 
-    # 清理进度条，显示成功
     progress_placeholder.empty()
     status_placeholder.success(
         f"✅ 数据就绪：{len(data)} 条记录 "
@@ -354,7 +356,7 @@ def main() -> None:
                     st.error("自动网格范围依赖 ATR，请关闭自动网格范围或确保数据完整")
                     return
 
-    # ===== P0: 香农理论洞察面板（实时计算）=====
+    # ===== 香农理论洞察 =====
     st.header("🧠 香农理论洞察")
 
     with st.spinner("正在计算理论预期..."):
@@ -364,12 +366,11 @@ def main() -> None:
                 grid_upper=config.grid_upper,
                 grid_lower=config.grid_lower,
                 grid_count=config.grid_number,
-                target_allocation=getattr(config, 'target_allocation', 0.5),
+                target_allocation=config.target_allocation,
                 commission_rate=config.commission_rate,
-                rebalance_threshold=getattr(config, 'rebalance_threshold', 0.05),
+                rebalance_threshold=config.rebalance_threshold,
             )
 
-            # 显示理论指标
             col_t1, col_t2, col_t3, col_t4 = st.columns(4)
             col_t1.metric("年化波动率", f"{insight.volatility*100:.1f}%")
             col_t2.metric("波动拖累", f"{insight.volatility_drag*100:.2f}%",
@@ -378,7 +379,6 @@ def main() -> None:
             col_t4.metric("再平衡溢价", f"{insight.rebalancing_premium*100:.2f}%",
                          help="再平衡策略相比买入持有的超额收益")
 
-            # 收益对比
             col_b1, col_b2, col_b3 = st.columns(3)
             col_b1.metric("📉 买入持有预期", f"{insight.buy_hold_return*100:.1f}%")
             col_b2.metric("📈 再平衡预期", f"{insight.rebalanced_return*100:.1f}%")
@@ -387,14 +387,12 @@ def main() -> None:
                          delta=f"{insight.rebalancing_premium*100:.1f}% 溢价 - 成本",
                          delta_color=delta_color)
 
-            # 配置建议
             if insight.confidence == "高":
                 st.success(f"✅ **{insight.recommendation}**")
             elif insight.confidence == "中":
                 st.info(f"ℹ️ **{insight.recommendation}**")
             else:
                 st.warning(f"⚠️ **{insight.recommendation}**")
-
         except Exception as e:
             st.warning(f"理论计算暂时不可用: {e}")
 
@@ -504,12 +502,11 @@ def main() -> None:
         detail_df = pd.DataFrame([metrics])
         st.dataframe(detail_df, width='stretch')
 
-    # ===== P1: 香农解读板块 =====
+    # ===== 香农解读 =====
     st.markdown("---")
     st.header("📚 本次回测的香农解读")
 
     try:
-        # 重新计算insight用于解读
         insight = calculate_shannon_insight(
             price_data=data["close"],
             grid_upper=config.grid_upper,
@@ -532,7 +529,6 @@ def main() -> None:
             st.write(f"- 理论预期溢价: **{insight.rebalancing_premium*100:.2f}%**")
             st.write(f"- 再平衡次数: **{metrics.get('rebalance_count', 0)}** 次")
 
-        # 建议
         st.markdown("**💡 优化建议**")
         if insight.net_benefit > 0.02:
             st.success("当前配置表现优秀！再平衡策略有效捕捉了波动收益。")
