@@ -61,7 +61,7 @@ class TestGridTradingConfig:
         config = GridTradingConfig()
         assert config.grid_number == 10
         assert config.initial_shares == 100
-        assert config.total_investment == 10000.0
+        assert config.total_investment == 200000.0
         assert config.commission_rate == 0.0003
         assert config.data_source == "baostock"
 

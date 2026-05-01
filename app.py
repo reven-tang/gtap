@@ -57,7 +57,7 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         with col_d2:
             end_date = st.date_input("结束日期", value=date(2024, 12, 31),
                 help="截至最近完整年度")
-        total_investment = st.number_input("投入总资金", value=10000.0,
+        total_investment = st.number_input("投入总资金", value=200000.0,
             min_value=0.0, step=100.0, format="%.2f")
         initial_shares = st.number_input("初次买入股数", value=100, min_value=1, step=1)
         shares_per_grid = st.number_input("每格交易股数", value=100, min_value=1, step=1)

@@ -28,7 +28,7 @@ class GridTradingConfig:
     grid_center: Optional[float] = None  # None = 自动（起始日收盘价）
     shares_per_grid: int = 100
     initial_shares: int = 100
-    total_investment: float = 10000.0
+    total_investment: float = 200000.0
 
     # 网格范围自动计算（P0-3）
     auto_grid_range: bool = False  # 是否基于 ATR 自动计算网格范围
