@@ -52,9 +52,11 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
             help="沪市sh.600958；深市sz.000001")
         col_d1, col_d2 = st.columns(2)
         with col_d1:
-            start_date = st.date_input("开始日期", value=date(2024, 1, 1))
+            start_date = st.date_input("开始日期", value=date(2022, 1, 1),
+                help="建议3年以上，确保再平衡事件统计显著")
         with col_d2:
-            end_date = st.date_input("结束日期", value=date(2024, 12, 31))
+            end_date = st.date_input("结束日期", value=date(2024, 12, 31),
+                help="截至最近完整年度")
         total_investment = st.number_input("投入总资金", value=10000.0,
             min_value=0.0, step=100.0, format="%.2f")
         initial_shares = st.number_input("初次买入股数", value=100, min_value=1, step=1)

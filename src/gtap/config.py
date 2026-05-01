@@ -18,7 +18,7 @@ class GridTradingConfig:
     stock_code: str = "sh.600958"
 
     # 日期范围
-    start_date: str = "2024-01-01"
+    start_date: str = "2022-01-01"
     end_date: str = "2024-12-31"
 
     # 网格参数
