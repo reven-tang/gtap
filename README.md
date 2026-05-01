@@ -5,9 +5,9 @@
 **基于香农的恶魔理论的网格交易回测平台**
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-141%20passed-green)](tests/)
+[![Tests](https://img.shields.io/badge/tests-176%20passed-green)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.0-blue)](PROGRESS.md)
+[![Version](https://img.shields.io/badge/version-0.8.1-blue)](PROGRESS.md)
 
 </div>
 

@@ -36,6 +36,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] — 2026-05-01
+
+### Fixed 修复
+- 🔧 **DuckDB 锁冲突**: 去除 store 单例 + context manager 确保连接释放
+- 🔧 **缓存不生效**: find_gaps 改用实际数据检查 + 中间空洞检测（>12天间隔）
+- 🔧 **BaoStock login 优化**: provider 复用，login 从 6次降到 1次
+- 🔧 **数据结束日期不符**: find_gaps 忽略 meta.first/last，改为查实际数据范围
+- 🔧 **空字符串转换失败**: BaoStock 停牌日返回空字符串 volume → replace('', pd.NA) + 过滤
+
+### Changed 变更
+- 🔄 `_smart_fetch_kline` 接收已有 provider 而非新建实例
+- 🔄 `BaoStockProvider` __init__ 时 login，close() 时 logout
+- 🔄 README 底部移除 🦀 图标
+
+### Stats 统计
+- 测试: 116 passed, 1 skipped
+- Commit: 10个 bug 修复 + 1个 README 清理
+
 ## v0.7.0 - 香农理论落地改进 (2026-05-01)
 
 ### 新增
