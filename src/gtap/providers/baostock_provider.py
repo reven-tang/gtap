@@ -53,9 +53,14 @@ class BaoStockProvider(DataProvider):
             if lg.error_code != "0":
                 raise DataFetchError(f"baostock 登录失败: {lg.error_msg}", code=lg.error_code)
 
+            # 日线/周线/月线不包含 time 字段（只有分钟线才有）
+            is_intraday = frequency in ("5", "15", "30", "60")
+            fields = "date,time,code,open,high,low,close,volume" if is_intraday \
+                else "date,code,open,high,low,close,volume"
+
             rs = bs.query_history_k_data_plus(
                 code,
-                "date,time,code,open,high,low,close,volume",
+                fields,
                 start_date=start_date,
                 end_date=end_date,
                 frequency=frequency,
@@ -69,14 +74,18 @@ class BaoStockProvider(DataProvider):
 
             # 数据清洗
             if not kline_df.empty:
-                time_series = kline_df["time"].fillna("").astype(str)
-                is_date_fmt = time_series.str.match(r"^\d+$")
-
-                kline_df["datetime"] = np.where(
-                    is_date_fmt,
-                    kline_df["date"].astype(str),
-                    kline_df["date"].astype(str) + " " + time_series.str[:8],
-                )
+                if is_intraday:
+                    # 分钟线: 拼接 date + time
+                    time_series = kline_df["time"].fillna("").astype(str)
+                    is_date_fmt = time_series.str.match(r"^\d+$")
+                    kline_df["datetime"] = np.where(
+                        is_date_fmt,
+                        kline_df["date"].astype(str),
+                        kline_df["date"].astype(str) + " " + time_series.str[:8],
+                    )
+                else:
+                    # 日线/周线/月线: 只用 date
+                    kline_df["datetime"] = kline_df["date"].astype(str)
                 kline_df["datetime"] = pd.to_datetime(kline_df["datetime"], format="mixed")
                 kline_df = kline_df.set_index("datetime")
 
