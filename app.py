@@ -424,104 +424,92 @@ def main() -> None:
             st.error(f"回测失败: {e}")
             return
 
-    # ===== K 线图 =====
-    st.markdown("---")
-    st.header("📊 K 线图 & 交易标注")
-    fig_kline = plot_kline(data, config.stock_code,
-                           atr_series=atr_series, trades=result.trades)
-    st.plotly_chart(fig_kline, width="stretch")
-
-    # ===== 交易记录 =====
-    st.subheader("📋 交易记录")
-    trades_df = pd.DataFrame([{
-        "操作": t.action,
-        "时间": t.timestamp,
-        "价格": f"{t.price:.2f}",
-        "数量": t.shares,
-        "持股总数": t.total_shares,
-        "佣金": f"{t.commission:.2f}",
-        "过户费": f"{t.transfer_fee:.2f}",
-        "印花税": f"{t.stamp_duty:.2f}",
-        "总费用": f"{t.total_fee:.2f}",
-        "持仓均价": f"{t.avg_price:.2f}",
-    } for t in result.trades])
-    st.dataframe(trades_df, width='stretch', height=400)
-
-    # ===== 资产曲线 vs BH对比 =====
-    st.subheader("📈 策略 vs 买入持有")
-    # 计算买入持有资产曲线
+    # ===== 计算买入持有基准 =====
     initial_cash = config.total_investment
     initial_price = data["close"].iloc[0]
-    bh_shares = int(initial_cash / initial_price / 100) * 100  # A股100股整数
+    bh_shares = int(initial_cash / initial_price / 100) * 100
     bh_cash = initial_cash - bh_shares * initial_price
     bh_values = [bh_shares * p + bh_cash for p in data["close"]]
-    fig_asset = plot_asset_curve(data.index, result.asset_values, bh_values=bh_values)
-    st.plotly_chart(fig_asset, width='stretch')
-
-    # BH对比指标
     bh_final = bh_values[-1]
     strategy_final = result.asset_values[-1]
     premium_pct = ((strategy_final - bh_final) / initial_cash) * 100
-    col_bh1, col_bh2, col_bh3 = st.columns(3)
-    col_bh1.metric("买入持有终值", f"¥{bh_final:,.2f}")
-    col_bh2.metric("策略终值", f"¥{strategy_final:,.2f}")
-    delta_val = strategy_final - bh_final
-    col_bh3.metric("再平衡溢价", f"{premium_pct:+.2f}%",
-                   delta=f"¥{delta_val:+,.2f}" if delta_val != 0 else None)
 
-    # ===== 绩效指标 =====
-    st.subheader("📊 绩效指标")
+    # ===== 结果展示 (Tab组织) =====
+    tab_overview, tab_kline, tab_trades, tab_insight = st.tabs(
+        ["📊 总览", "📈 K线图+交易", "📋 交易明细", "🧠 香农解读"])
 
-    metrics = calculate_metrics(
-        asset_values=result.asset_values,
-        trades=result.trades,
-        total_fees=result.total_fees,
-        start_date=pd.Timestamp(config.start_date),
-        end_date=pd.Timestamp(config.end_date),
-        trade_profits=result.trade_profits,
-    )
+    with tab_overview:
+        # 股票概览 + BH对比 + 关键指标
+        latest = data.iloc[-1]
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("收盘", f"¥{latest['close']:.2f}")
+        col2.metric("涨跌幅", f"{(latest['close']/data.iloc[-2]['close']-1)*100:+.2f}%" if len(data)>1 else "N/A")
+        col3.metric("BH终值", f"¥{bh_final:,.0f}")
+        col4.metric("策略终值", f"¥{strategy_final:,.0f}", delta=f"{premium_pct:+.1f}%")
 
-    col1, col2, col3, col4 = st.columns(4)
-    initial_val = result.asset_values[0] if result.asset_values else 0
-    final_val = result.asset_values[-1] if result.asset_values else 0
-    col1.metric("初始资产", f"¥{initial_val:,.2f}")
-    col2.metric("最终资产", f"¥{final_val:,.2f}")
-    col3.metric("总利润（含费）", f"¥{final_val - initial_val:,.2f}")
-    col4.metric("总费用", f"¥{result.total_fees:,.2f}")
+        st.plotly_chart(fig_asset, width='stretch')
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("总收益率", f"{metrics['total_return']:.2f}%")
-    col2.metric("年化收益率", f"{metrics['annual_return']:.2f}%")
-    col3.metric("年化波动率", f"{metrics['annual_volatility']:.2f}%")
+    with tab_kline:
+        fig_kline = plot_kline(data, config.stock_code,
+                               atr_series=atr_series, trades=result.trades)
+        st.plotly_chart(fig_kline, width='stretch')
 
-    if config.use_atr_stop:
-        st.markdown("**🛡️ ATR 动态止损止盈统计**")
-        col_a, col_b, col_c, col_d, col_e = st.columns(5)
-        col_a.metric("止损次数", str(result.stop_loss_count))
-        col_b.metric("止盈次数", str(result.take_profit_count))
-        col_c.metric("网格交易次数", str(result.grid_trade_count))
-        col_d.metric("止损占比", f"{metrics['stop_loss_rate']:.2%}")
-        col_e.metric("止盈占比", f"{metrics['take_profit_rate']:.2%}")
+    with tab_trades:
+        st.dataframe(trades_df, width='stretch', height=500)
 
-    # 再平衡统计
-    if "rebalance" in config.strategy_mode:
-        st.markdown("**⚖️ 再平衡统计**")
-        col_r1, col_r2 = st.columns(2)
-        col_r1.metric("再平衡次数", str(metrics.get("rebalance_count", 0)))
-        col_r2.metric("再平衡溢价", f"{metrics.get('rebalancing_premium', 0):.4f}")
+    with tab_insight:
+        # ===== 绩效指标 =====
+        st.subheader("📊 绩效指标")
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("夏普比率", f"{metrics['sharpe_ratio']:.2f}")
-    col2.metric("最大回撤", f"{metrics['max_drawdown']:.2f}%")
-    col3.metric("胜率", f"{metrics.get('win_rate', 0):.2%}")
+        metrics = calculate_metrics(
+            asset_values=result.asset_values,
+            trades=result.trades,
+            total_fees=result.total_fees,
+            start_date=pd.Timestamp(config.start_date),
+            end_date=pd.Timestamp(config.end_date),
+            trade_profits=result.trade_profits,
+        )
 
-    with st.expander("📑 详细指标表"):
-        detail_df = pd.DataFrame([metrics])
-        st.dataframe(detail_df, width='stretch')
+        col1, col2, col3, col4 = st.columns(4)
+        initial_val = result.asset_values[0] if result.asset_values else 0
+        final_val = result.asset_values[-1] if result.asset_values else 0
+        col1.metric("初始资产", f"¥{initial_val:,.2f}")
+        col2.metric("最终资产", f"¥{final_val:,.2f}")
+        col3.metric("总利润（含费）", f"¥{final_val - initial_val:,.2f}")
+        col4.metric("总费用", f"¥{result.total_fees:,.2f}")
 
-    # ===== 香农解读 =====
-    st.markdown("---")
-    st.header("📚 本次回测的香农解读")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("总收益率", f"{metrics['total_return']:.2f}%")
+        col2.metric("年化收益率", f"{metrics['annual_return']:.2f}%")
+        col3.metric("年化波动率", f"{metrics['annual_volatility']:.2f}%")
+
+        if config.use_atr_stop:
+            st.markdown("**🛡️ ATR 动态止损止盈统计**")
+            col_a, col_b, col_c, col_d, col_e = st.columns(5)
+            col_a.metric("止损次数", str(result.stop_loss_count))
+            col_b.metric("止盈次数", str(result.take_profit_count))
+            col_c.metric("网格交易次数", str(result.grid_trade_count))
+            col_d.metric("止损占比", f"{metrics['stop_loss_rate']:.2%}")
+            col_e.metric("止盈占比", f"{metrics['take_profit_rate']:.2%}")
+
+        if "rebalance" in config.strategy_mode:
+            st.markdown("**⚖️ 再平衡统计**")
+            col_r1, col_r2 = st.columns(2)
+            col_r1.metric("再平衡次数", str(metrics.get("rebalance_count", 0)))
+            col_r2.metric("再平衡溢价", f"{metrics.get('rebalancing_premium', 0):.4f}")
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("夏普比率", f"{metrics['sharpe_ratio']:.2f}")
+        col2.metric("最大回撤", f"{metrics['max_drawdown']:.2f}%")
+        col3.metric("胜率", f"{metrics.get('win_rate', 0):.2%}")
+
+        with st.expander("📑 详细指标表"):
+            detail_df = pd.DataFrame([metrics])
+            st.dataframe(detail_df, width='stretch')
+
+        # ===== 香农解读 =====
+        st.markdown("---")
+        st.header("📚 本次回测的香农解读")
 
     try:
         insight = calculate_shannon_insight(
