@@ -19,11 +19,23 @@ class BaoStockProvider(DataProvider):
     支持 A 股沪市和深市数据获取。BaoStock 是免费的 A 股数据源，
     提供日线/分钟线 K 线数据、除权除息、基本资料和季频财务数据。
 
+    初始化时登录一次，所有 fetch 方法共用连接，close() 时 logout。
+
     Attributes:
         name: "baostock"
     """
 
     name = "baostock"
+
+    def __init__(self):
+        """初始化 BaoStock 连接（登录一次，所有 fetch 共用）"""
+        lg = bs.login()
+        if lg.error_code != "0":
+            raise DataFetchError(f"baostock 登录失败: {lg.error_msg}", code=lg.error_code)
+
+    def close(self):
+        """关闭 BaoStock 连接"""
+        bs.logout()
 
     def fetch_kline(
         self,
@@ -33,26 +45,8 @@ class BaoStockProvider(DataProvider):
         frequency: str = "d",
         adjustflag: str = "3",
     ) -> pd.DataFrame:
-        """获取 K 线数据。
-
-        Args:
-            code: BaoStock 格式代码，如 "sh.601398"
-            start_date: 开始日期 YYYY-MM-DD
-            end_date: 结束日期 YYYY-MM-DD
-            frequency: "5"/"15"/"30"/"60"/"d"/"w"/"m"
-            adjustflag: "1"前复权/"2"后复权/"3"不复权
-
-        Returns:
-            DataFrame with columns: open, high, low, close, volume, datetime index
-
-        Raises:
-            DataFetchError: 数据获取失败
-        """
+        """获取 K 线数据（无需 login/logout，已由 __init__ 管理）"""
         try:
-            lg = bs.login()
-            if lg.error_code != "0":
-                raise DataFetchError(f"baostock 登录失败: {lg.error_msg}", code=lg.error_code)
-
             # 日线/周线/月线不包含 time 字段（只有分钟线才有）
             is_intraday = frequency in ("5", "15", "30", "60")
             fields = "date,time,code,open,high,low,close,volume" if is_intraday \
@@ -92,64 +86,41 @@ class BaoStockProvider(DataProvider):
                 numeric_cols = ["open", "high", "low", "close", "volume"]
                 kline_df[numeric_cols] = kline_df[numeric_cols].astype(float)
 
-            bs.logout()
             return kline_df
 
         except DataFetchError:
             raise
         except Exception as e:
-            try:
-                bs.logout()
-            except Exception:
-                pass
             raise DataFetchError(f"BaoStock K线数据获取失败: {e}", original_error=e)
 
     def fetch_dividend(self, code: str) -> pd.DataFrame:
-        """获取除权除息数据。"""
+        """获取除权除息数据（无需 login/logout，已由 __init__ 管理）"""
         try:
-            lg = bs.login()
-            if lg.error_code != "0":
-                raise DataFetchError(f"baostock 登录失败: {lg.error_msg}")
-
             rs = bs.query_dividend_data(code=code, year="", yearType="report")
             dividend_list = []
             while rs.error_code == "0" and rs.next():
                 dividend_list.append(rs.get_row_data())
 
-            bs.logout()
             return pd.DataFrame(dividend_list, columns=rs.fields)
 
         except DataFetchError:
             raise
         except Exception as e:
-            try:
-                bs.logout()
-            except Exception:
-                pass
             raise DataFetchError(f"除权除息数据获取失败: {e}", original_error=e)
 
     def fetch_basic(self, code: str) -> pd.DataFrame:
-        """获取证券基本资料。"""
+        """获取证券基本资料（无需 login/logout，已由 __init__ 管理）"""
         try:
-            lg = bs.login()
-            if lg.error_code != "0":
-                raise DataFetchError(f"baostock 登录失败: {lg.error_msg}")
-
             rs = bs.query_stock_basic(code=code)
             basic_list = []
             while rs.error_code == "0" and rs.next():
                 basic_list.append(rs.get_row_data())
 
-            bs.logout()
             return pd.DataFrame(basic_list, columns=rs.fields)
 
         except DataFetchError:
             raise
         except Exception as e:
-            try:
-                bs.logout()
-            except Exception:
-                pass
             raise DataFetchError(f"基本资料获取失败: {e}", original_error=e)
 
     def supported_markets(self) -> List[str]:

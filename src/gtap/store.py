@@ -198,45 +198,36 @@ class DataStore:
         start_date: str,
         end_date: str,
     ) -> List[Tuple[str, str]]:
+        """找出本地仓库中缺失的日期区间。
+
+        策略：基于 stock_meta 的 first_date/last_date 判断覆盖范围。
+        如果本地数据的 last_date >= end_date 且 first_date <= start_date，
+        则认为无缺口（即使中间有节假日空缺，那是正常的——非交易日无数据）。
         """
-        找出本地仓库中缺失的日期区间（仅考虑交易日）。
+        try:
+            meta = self.conn.execute(
+                "SELECT first_date, last_date FROM stock_meta WHERE code = ?",
+                [code],
+            ).fetchone()
+        except Exception:
+            meta = None
 
-        Args:
-            code: 股票代码
-            start_date: 请求起始日期
-            end_date: 请求结束日期
+        if meta is None:
+            # 本地完全没有该股票数据
+            return [(start_date, end_date)]
 
-        Returns:
-            缺口区间列表，如 [("2020-01-01", "2020-06-30"), ("2023-01-01", "2023-12-31")]
-        """
-        local = self.get_kline(code, start_date, end_date)
-        if local.empty:
-            return [(start_date, end_date)]  # 完全缺失
+        local_first, local_last = meta
 
-        local_dates = set(local.index.date)
-        req_start = date.fromisoformat(start_date)
-        req_end = date.fromisoformat(end_date)
+        # 本地数据覆盖了请求范围 → 无缺口
+        if str(local_first) <= start_date and str(local_last) >= end_date:
+            return []
 
-        # 生成交易日列表（业务日），跳过周末
-        all_trading_days = pd.bdate_range(start=req_start, end=req_end)
-
-        gaps: List[Tuple[str, str]] = []
-        gap_start: Optional[date] = None
-
-        for current in all_trading_days:
-            d = current.date() if hasattr(current, 'date') else current
-            if d not in local_dates:
-                if gap_start is None:
-                    gap_start = d
-            else:
-                if gap_start is not None:
-                    prev = d - timedelta(days=1)
-                    # 找前一个交易日作为 gap end
-                    gaps.append((gap_start.isoformat(), prev.isoformat()))
-                    gap_start = None
-
-        if gap_start is not None:
-            gaps.append((gap_start.isoformat(), req_end.isoformat()))
+        # 计算缺口
+        gaps = []
+        if str(local_first) > start_date:
+            gaps.append((start_date, str(local_first)))
+        if str(local_last) < end_date:
+            gaps.append((str(local_last), end_date))
 
         return gaps
 

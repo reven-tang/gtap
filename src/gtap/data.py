@@ -166,8 +166,8 @@ def get_stock_data(
         forecast_df = empty_df
 
         if show_quarterly and data_source == "baostock":
+            # provider 已在 __init__ 中 login，直接用
             import baostock as bs
-            bs.login()
             year = start_date[:4]
 
             def _fetch_baostock_table(query_fn, code, year, quarter="1"):
@@ -204,7 +204,7 @@ def get_stock_data(
                 forecast_rows, columns=rs_forecast.fields
             ) if forecast_rows else pd.DataFrame()
 
-            bs.logout()
+            # 不需要 bs.logout() — provider.close() 会处理
 
         return StockData(
             kline=kline_df,
@@ -224,6 +224,10 @@ def get_stock_data(
         raise
     except Exception as e:
         raise DataFetchError(f"数据获取失败: {e}", original_error=e)
+
+    finally:
+        if 'provider' in dir() and hasattr(provider, 'close'):
+            provider.close()
 
 
 def auto_frequency(
