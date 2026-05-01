@@ -46,6 +46,37 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
 
     st.sidebar.title("📈 GTAP 香农回测")
 
+    # ========== 快速预设 ==========
+    st.sidebar.markdown("**⚡ 快速预设**")
+    preset = st.sidebar.selectbox(
+        "选择预设策略",
+        options=["自定义", "🟢 香农经典(50/50)", "🔵 保守蓝筹(70/30)", "🔴 激进震荡(40/60)"],
+        index=0,
+        help="快速应用预设的再平衡参数"
+    )
+
+    preset_configs = {
+        "🟢 香农经典(50/50)": {
+            "strategy_mode": "rebalance_threshold", "target_allocation": 0.5,
+            "rebalance_threshold": 0.05, "position_mode": "proportional",
+            "auto_grid_range": True, "grid_spacing_mode": "geometric",
+        },
+        "🔵 保守蓝筹(70/30)": {
+            "strategy_mode": "rebalance_threshold", "target_allocation": 0.7,
+            "rebalance_threshold": 0.08, "position_mode": "proportional",
+            "auto_grid_range": True, "grid_spacing_mode": "arithmetic",
+        },
+        "🔴 激进震荡(40/60)": {
+            "strategy_mode": "rebalance_threshold", "target_allocation": 0.4,
+            "rebalance_threshold": 0.03, "position_mode": "proportional",
+            "auto_grid_range": True, "grid_spacing_mode": "geometric",
+        },
+    }
+
+    # 应用预设
+    if preset != "自定义":
+        st.sidebar.success(f"已应用: {preset}")
+
     # ========== 基础设置 ==========
     with st.sidebar.expander("🎯 基础设置", expanded=True):
         stock_code = st.text_input("股票代码", value="sh.600958",
@@ -243,6 +274,16 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
     st.sidebar.write("")
     run_button = st.sidebar.button("▶️ 运行回测", type="primary",
                                    use_container_width=True)
+
+    # 应用预设配置
+    if preset != "自定义":
+        preset_vals = preset_configs[preset]
+        strategy_mode = preset_vals.get("strategy_mode", strategy_mode)
+        target_allocation = preset_vals.get("target_allocation", target_allocation)
+        rebalance_threshold = preset_vals.get("rebalance_threshold", rebalance_threshold)
+        position_mode = preset_vals.get("position_mode", position_mode)
+        auto_grid_range = preset_vals.get("auto_grid_range", auto_grid_range)
+        grid_spacing_mode = preset_vals.get("grid_spacing_mode", grid_spacing_mode)
 
     config = GridTradingConfig(
         stock_code=stock_code,
