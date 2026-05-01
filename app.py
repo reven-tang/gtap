@@ -490,6 +490,7 @@ def main() -> None:
         col3.metric("BH终值", f"¥{bh_final:,.0f}")
         col4.metric("策略终值", f"¥{strategy_final:,.0f}", delta=f"{premium_pct:+.1f}%")
 
+        fig_asset = plot_asset_curve(data.index, result.asset_values, bh_values=bh_values)
         st.plotly_chart(fig_asset, width='stretch')
 
     with tab_kline:
