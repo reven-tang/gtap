@@ -178,11 +178,13 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
 
         # 再平衡参数
         if "rebalance" in strategy_mode:
-            target_allocation = st.slider("目标股票比例", min_value=0.1,
-                max_value=0.9, value=0.5, step=0.05,
+            target_allocation = st.select_slider("目标股票比例",
+                options=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+                value=0.5,
                 format_func=lambda x: f"{x*100:.0f}%")
-            rebalance_threshold = st.slider("再平衡阈值", min_value=0.01,
-                max_value=0.20, value=0.05, step=0.01,
+            rebalance_threshold = st.select_slider("再平衡阈值",
+                options=[0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10, 0.12, 0.15, 0.20],
+                value=0.05,
                 format_func=lambda x: f"{x*100:.0f}%")
         else:
             target_allocation = 0.5
