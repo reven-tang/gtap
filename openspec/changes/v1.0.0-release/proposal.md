@@ -55,7 +55,7 @@ v1.0.0 将标志着**第一个生产可用版本**，可在 PyPI 安装并实际
 ## 相关链接
 
 - ROADMAP.md: v1.0.0 里程碑
-- CHANGELOG.md: 当前最新 v0.8.1
+- CHANGELOG.md: 当前最新 v1.0.0
 - README.md: 项目入口
 
 ---

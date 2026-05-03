@@ -20,8 +20,8 @@ echo "🚀 GTAP v1.0.0 发布流程启动..."
 
 # Step 1: 环境检查
 echo "🔍 检查环境..."
-python --version
-pip --version
+python3 --version
+pip3 --version
 
 # Step 2: 运行测试
 echo "🧪 运行测试..."
@@ -30,7 +30,7 @@ pytest --cov=gtap
 
 # Step 3: 构建分发包
 echo "📦 构建分发包..."
-python -m build
+python3 -m build
 
 # Step 4: 检查包
 echo "🔎 检查包..."
@@ -47,7 +47,12 @@ if [[ "$TEST_PYPI" == "true" ]]; then
   twine upload --repository testpypi dist/*
 else
   echo "📤 上传到 PyPI..."
-  twine upload dist/*
+  # 支持环境变量 PYPI_TOKEN 或 .pypirc 配置
+  if [[ -n "$PYPI_TOKEN" ]]; then
+    echo "$PYPI_TOKEN" | twine upload dist/* -u __token__ -
+  else
+    twine upload dist/*
+  fi
 fi
 
 # Step 6: 打标签
