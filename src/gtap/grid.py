@@ -69,6 +69,10 @@ def grid_trading(
     Raises:
         GridTradingError: 回测过程出错
     """
+    # data 可能是 StockData 对象或 DataFrame，统一转换为 DataFrame
+    if hasattr(data, 'kline'):
+        data = data.kline
+    
     if data.empty:
         raise GridTradingError("输入数据为空")
 

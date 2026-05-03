@@ -42,3 +42,22 @@ htmlcov/
 # Local environment
 myenv/
 .env
+
+# Build artifacts
+docs/_build/
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Data files (user-specific)
+data/*.db
+data/*.duckdb
+
+# OS
+.DS_Store
+*.swp
+*.swo
+
+# Temporary
+*.tmp
+*.log

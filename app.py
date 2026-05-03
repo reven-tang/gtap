@@ -475,7 +475,7 @@ def main() -> None:
 
     with st.spinner("正在执行回测..."):
         try:
-            result = grid_trading(data, config, atr_series=atr_series)
+            result = grid_trading(data.kline, config, atr_series=atr_series)
         except GridTradingError as e:
             st.error(f"回测失败: {e}")
             return

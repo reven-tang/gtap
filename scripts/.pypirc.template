@@ -1,0 +1,18 @@
+# PyPI 上传凭证配置模板
+# 使用前复制为 .pypirc 并填入真实 token
+#
+# 获取 token:
+# 1. 登录 https://pypi.org/manage/account/token/
+# 2. 创建 API token（Scope: Entire account 或 Specific project）
+# 3. 将 token 粘贴到下方
+#
+# 注意：.pypirc 不应提交到 Git（已在 .gitignore 中）
+
+[pypi]
+username = __token__
+password = pypi-AgEIcHlwaS5vcmcC...  # 替换为你的 token
+
+# 测试 PyPI（可选，用于预发布验证）
+[testpypi]
+username = __token__
+password = pypi-AgEIcHlwaS5vcmcC...  # 替换为 testpypi token

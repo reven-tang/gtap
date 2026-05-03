@@ -1,0 +1,46 @@
+# .dockerignore
+# 排除不需要复制到镜像的文件
+
+# Git
+.git
+.gitignore
+
+# Python 缓存
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+venv
+.venv
+
+# 测试和构建产物
+.coverage
+.pytest_cache
+.ruff_cache
+.mypy_cache
+htmlcov
+dist
+build
+*.egg-info
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# 文档构建
+docs/_build
+
+# 数据（运行时挂载）
+data/*
+!data/.gitkeep
+
+# 临时文件
+*.log
+.DS_Store
+
+# 发布脚本敏感文件（实际运行时可挂载）
+scripts/.pypirc
