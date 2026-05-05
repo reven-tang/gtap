@@ -5,6 +5,7 @@ from src.gtap.fees import calculate_fees
 from src.gtap.exceptions import ConfigError
 
 
+@pytest.mark.smoke
 class TestCalculateFees:
     """测试 calculate_fees 函数"""
 

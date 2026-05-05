@@ -45,6 +45,7 @@ def make_config(**overrides) -> GridTradingConfig:
     return GridTradingConfig(**defaults)
 
 
+@pytest.mark.smoke
 class TestGridTrading:
     """测试网格交易回测引擎"""
 

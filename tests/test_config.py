@@ -5,6 +5,8 @@ from src.gtap.config import GridTradingConfig
 from src.gtap.exceptions import ConfigError
 
 
+@pytest.mark.smoke
+@pytest.mark.smoke
 class TestGridTradingConfig:
     """测试配置类"""
 

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from src.gtap.metrics import calculate_metrics, calculate_trade_metrics
 
 
+@pytest.mark.smoke
 class TestCalculateMetrics:
     """测试绩效指标计算"""
 

@@ -28,6 +28,7 @@ def _make_kline_df(datetime_index, open_price=10.0, high=10.5, low=9.8, close=10
     }, index=pd.DatetimeIndex([pd.Timestamp(datetime_index)]))
 
 
+@pytest.mark.smoke
 class TestGetStockData:
     """测试数据获取逻辑（Provider 抽象层）"""
 

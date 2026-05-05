@@ -57,3 +57,9 @@ target-version = "py39"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "smoke: 冒烟测试 - 每次提交必跑的核心路径测试",
+    "fast: 快速测试 - 单个函数级验证",
+    "integration: 集成测试 - 跨模块流程",
+    "e2e: 端到端测试 - 浏览器UI验证",
+]
