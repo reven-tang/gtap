@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-99%20passed-green)](tests/)
-[![Version](https://img.shields.io/badge/version-1.1.1-blue)](PROGRESS.md)
+[![Version](https://img.shields.io/badge/version-1.1.2-blue)](PROGRESS.md)
 
 </div>
 

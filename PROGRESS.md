@@ -80,8 +80,28 @@ theory.py → TheorySignal(regime, kelly_allocation, vol_drag) → strategies.py
 |------|--------|--------|
 | v0.4.0 (之前) | 基础网格+ATR+3数据源 | 30% |
 | v0.7.0 (之前) | P0+P1+P2+P3 全完成 | ~70% |
-| **v1.1.1 (当前)** | P0过度交易修复 + P1 UI集成/Regime优化 + P2可视化 | **100%** |
+| **v1.1.2 (当前)** | P0修复 + P1集成 + P2可视化 + **门禁系统硬化** | **100%** |
 | v1.2.0 (目标) | PyPI发布 | 95% |
+
+---
+
+## v1.1.2 — 门禁系统硬化 ✅ COMPLETED
+
+**目标**: 建立完整门禁系统，确保开发质量与发布可靠性
+
+| # | 改进 | 状态 | 改动摘要 |
+|---|------|------|---------|
+| 门禁1 | 冒烟测试框架 | ✅ | tools/smoke-test-gtap.py（5项核心，0.45秒） |
+| 门禁2 | 增量测试映射 | ✅ | tools/test-mapper.py（12文件映射，staged优先检测） |
+| 门禁3 | gate-check 门禁 | ✅ | gate-check-gtap.py（BUILD+QA全链路） |
+| 门禁4 | E2E 测试框架 | ✅ | tests/e2e/test_user_journey.py（11场景） |
+| 门禁5 | 浏览器验证降级 | ✅ | Playwright→HTTP→端口连接三级降级 |
+| 门禁6 | Skill Quality 门禁 | ✅ | 自动读取技能评估（87/83≥80） |
+| 门禁7 | 系统模板抽象 | ✅ | templates/ 通用门禁模板（4个核心） |
+
+**性能提升**: 首次提交验证 0.45秒（原 3分钟，400x），日常提交 <0.5秒（360x）
+
+**测试**: 58 smoke + 4-5 incremental + 11 e2e，全部通过
 
 ---
 

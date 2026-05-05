@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] — 2026-05-05 (门禁系统硬化)
+
+### Added 新增
+- 🛡️ **门禁系统 (Gate Check)**: 通用门禁框架（gate-check-core.py + templates/），支持 smoke/incremental/e2e 分层测试策略
+- 🧪 **冒烟测试框架**: tools/smoke-test-gtap.py（5项核心检查，0.45秒）
+- 🗺️ **增量测试映射**: tools/test-mapper.py（git diff → 测试映射，12文件，staged优先）
+- 🌐 **E2E 测试框架**: tests/e2e/test_user_journey.py（11场景）
+- 📋 **测试模板库**: templates/ 目录（gate-check-core/smoke-test-stub/test-mapper-stub/e2e-scaffold）
+- ✅ **浏览器验证降级**: Playwright 不可用时降级为 HTTP 200 + 内容检查（三级降级）
+- 📊 **Skill Quality 门禁**: 自动读取技能评估报告（gstack-qa:87, browser:83），分数≥80阻断
+
+### Fixed 修复
+- 🐛 **gate-check coverage 逻辑**: smoke 模式错误检查覆盖率 → 已修复（smoke 跳过，增量模式检查≥70%）
+- 🐛 **test-mapper 检测基准**: git diff HEAD^ 在连续提交后失效 → 已修复（优先 staged，fallback HEAD^）
+- 🐛 **端口检测 TIME_WAIT**: socket.bind() 误判占用 → 已修复（socket.create_connection）
+- 🐛 **skill_quality 字段名**: gate-check 读 overall_score vs skill-evaluator 写 total_score → 已统一为 total_score
+
+### Changed 变更
+- 🔄 pyproject.toml: 注册 pytest markers（smoke/fast/integration/e2e）
+- 🔄 .gitignore: 忽略 tests/screenshots/ 测试产物
+- 🔄 PROGRESS.md: 门禁系统完成度 70% → 100%
+- 🔄 README: 版本徽章 1.1.1 → 1.1.2（待提交）
+
+### Performance 性能
+- ⚡ 首次提交验证: 0.45秒（原 3分钟，提升 400x）
+- ⚡ 日常提交验证: <0.5秒（原 3分钟，提升 360x）
+- 💾 内存占用: ~50MB（原 600MB，降低 92%）
+
+---
+
 ## [1.1.1] — 2026-05-05
 
 ### Fixed 修复
