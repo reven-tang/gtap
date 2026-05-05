@@ -61,3 +61,6 @@ data/*.duckdb
 # Temporary
 *.tmp
 *.log
+
+# Test artifacts
+tests/screenshots/
