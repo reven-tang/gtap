@@ -22,25 +22,36 @@ FILE_TEST_MAP = {
     "src/gtap/fees.py": ["tests/test_fees.py"],
     "src/gtap/metrics.py": ["tests/test_metrics.py", "tests/test_metrics_precision.py"],
     "src/gtap/data.py": ["tests/test_data.py", "tests/integration/test_end_to_end.py"],
-    
-    # ========== 策略与实现 ==========
     "src/gtap/strategies.py": ["tests/test_strategies.py"],
     "src/gtap/atr.py": ["tests/test_atr.py"],
-    
-    # ========== 数据源 ==========
+    "src/gtap/store.py": ["tests/test_store.py"],
+    "src/gtap/exceptions.py": ["tests/test_config.py", "tests/test_grid.py", "tests/test_data.py"],
+
+    # ========== 策略变体 ==========
+    "src/gtap/parrondo.py": ["tests/test_portfolio_parrondo.py"],
+    "src/gtap/portfolio.py": ["tests/test_portfolio_parrondo.py"],
+
+    # ========== 可视化 ==========
+    "src/gtap/plot.py": ["tests/test_plot.py"],
+
+    # ========== 理论与文档 ==========
+    "src/gtap/theory.py": ["tests/test_theory.py"],
+
+    # ========== 数据源（全部归并到 providers 测试） ==========
+    "src/gtap/providers/": ["tests/test_providers.py"],
+    "src/gtap/providers/base.py": ["tests/test_providers.py"],
     "src/gtap/providers/factory.py": ["tests/test_providers.py"],
     "src/gtap/providers/baostock_provider.py": ["tests/test_providers.py"],
     "src/gtap/providers/yfinance_provider.py": ["tests/test_providers.py"],
-    
-    # ========== 存储与异常 ==========
-    "src/gtap/store.py": ["tests/test_store.py"],
-    "src/gtap/exceptions.py": ["tests/test_config.py", "tests/test_grid.py", "tests/test_data.py"],
-    
+    "src/gtap/providers/akshare_provider.py": ["tests/test_providers.py"],
+
+    # ========== 入口与工具（不触发测试） ==========
+    "src/gtap/cli.py": [],
+    "src/gtap/__init__.py": [],
+
     # ========== 文档与脚本（不触发测试） ==========
     "docs/": [],
     "README.md": [],
-    "src/gtap/__init__.py": [],
-    "src/gtap/cli.py": [],
 }
 
 
