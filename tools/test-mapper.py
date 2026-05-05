@@ -55,11 +55,27 @@ FILE_TEST_MAP = {
 }
 
 
-def get_changed_files(base="HEAD^", src_dir="src/gtap/"):
-    """获取自上次提交后改动的源码文件"""
+def get_changed_files(base=None, src_dir="src/gtap/"):
+    """
+    获取改动的源码文件
+    - pre-commit 场景: 检测 staged 文件 (git diff --cached)
+    - 手动/CI 场景: 检测工作区所有改动 (git diff HEAD^)
+    优先 staged，fallback 到 HEAD^
+    """
     try:
+        # 优先检测 staged 文件（pre-commit hook 场景）
         result = subprocess.run(
-            ["git", "diff", "--name-only", base],
+            ["git", "diff", "--name-only", "--cached"],
+            capture_output=True, text=True, timeout=10,
+            cwd=str(PROJECT)
+        )
+        files = [f.strip() for f in result.stdout.splitlines() if f.strip()]
+        if files:
+            return [f for f in files if f.startswith(src_dir)]
+        
+        # fallback: 检测自上次提交后的改动
+        result = subprocess.run(
+            ["git", "diff", "--name-only", base or "HEAD^", "HEAD"],
             capture_output=True, text=True, timeout=10,
             cwd=str(PROJECT)
         )
