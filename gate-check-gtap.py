@@ -75,9 +75,9 @@ def check_build():
     if not ok3:
         passed = False
 
-    # 4) 覆盖率 (仅 smoke 模式或增量目标包含核心模块时)
-    # 简化：只对 smoke 模式检查覆盖率
-    if targets == ["-m", "smoke"]:
+    # 4) 覆盖率（增量模式检查，smoke 模式跳过）
+    # 增量模式应覆盖相关代码；smoke 模式只验证快速通过，覆盖率非阻塞
+    if targets != ["-m", "smoke"]:
         r4 = run(["python3", "-m", "pytest", "-m", "smoke", "tests/", "--cov=src/gtap", "--cov-report=json", "-q"], timeout=90)
         cov_pct = 0
         if r4.returncode == 0:
@@ -89,8 +89,9 @@ def check_build():
         print(f"  {'✓' if ok4 else '✗'} coverage: {cov_pct:.1f}% (≥70%)")
         if not ok4:
             passed = False
+            print(f"    ⚠ 覆盖率不足，请补充核心模块测试")
     else:
-        print(f"  ✓ coverage: 增量模式跳过（后台异步）")
+        print(f"  ⏭️  coverage: smoke 模式跳过（增量时检查）")
 
     print(f"\n  {'✅ PASS' if passed else '❌ BLOCK'}: BUILD → VERIFY")
     return passed
