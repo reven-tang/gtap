@@ -30,7 +30,7 @@ pytest --cov=gtap
 
 # Step 3: 构建分发包
 echo "📦 构建分发包..."
-python3 -m build
+python -m build
 
 # Step 4: 检查包
 echo "🔎 检查包..."

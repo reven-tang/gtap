@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-05-05
+
+### Fixed 修复
+
+- 🐛 **过度交易bug**: 固定50%模式22,841次交易→30次，费用¥159,761→¥179
+  - 5步冷却期 + 8×费率最低再平衡门槛
+- 🐛 **regime判断优化**: "不确定"1711次→0次，震荡16→1588次
+  - 动态阈值（基于数据波动率）+ 方向一致性 + 回归斜率
+- 🐛 **data.kline双重引用**: `grid_trading(data, config)` 替代 `data.kline`
+- 🐛 **重复pandas导入**: 删除局部 `import pandas as pd`，只保留顶部导入
+- 🐛 **P2代码位置错误**: 从回测前移到 tab_insight 内（result已定义后）
+
+### Added 新增
+
+- 🧮 **凯利仓位动态曲线**: kelly_allocation_timestamps追踪 + 时间序列折线图
+- 💰 **成本敏感度分析**: 阈值vs交易次数/费用双曲线
+- 🔄 **6个新UI控件**: 凯利仓位/市场自适应/网格密度开关
+- 📋 **kelly_allocation_timestamps**: GridTradingResult新增字段
+
+### Changed 变更
+
+- 🔄 PROGRESS.md 版本对齐度更新: 70% → 100%
+- 🔄 README 版本徽章: 1.0.0 → 1.1.1
+
+---
+
 ## [1.0.0] — 2026-05-03 (in progress)
 
 ### Added 新增

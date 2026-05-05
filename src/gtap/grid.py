@@ -14,6 +14,7 @@ import pandas as pd
 from .fees import calculate_fees
 from .exceptions import GridTradingError
 from .config import GridTradingConfig
+from .strategies import TheorySignal, KellyRebalanceStrategy, RegimeAwareEngine
 
 
 class Trade(NamedTuple):
@@ -36,7 +37,7 @@ class Trade(NamedTuple):
 
 class GridTradingResult(NamedTuple):
     """网格交易回测结果"""
-    trades: list[Trade]                # 交易记录
+    trades: list                # 交易记录
     total_buy_volume: float            # 总买入金额
     total_sell_volume: float           # 总卖出金额
     total_buy_count: int               # 买入次数
@@ -48,6 +49,11 @@ class GridTradingResult(NamedTuple):
     stop_loss_count: int = 0           # 止损次数
     take_profit_count: int = 0         # 止盈次数
     grid_trade_count: int = 0          # 网格触发次数（非止损/止盈）
+    # v1.1.0 理论信号统计
+    theory_signals: Optional[list[TheorySignal]] = None  # 理论信号序列
+    regime_summary: Optional[dict] = None                # 市场状态切换统计
+    kelly_allocations: Optional[list[float]] = None      # 凯利仓位变化序列
+    kelly_allocation_timestamps: Optional[list[str]] = None  # 仓位变化时间戳
 
 
 def grid_trading(
@@ -134,6 +140,18 @@ def grid_trading(
         grid_lower = config.grid_lower
 
     # 预计算网格线价格
+    # === v1.1.0 P1: 波动率自适应网格密度 ===
+    if config.auto_grid_density and atr_series is not None:
+        valid_atr = atr_series.dropna()
+        if len(valid_atr) > 0:
+            avg_atr = float(valid_atr.mean())
+            price_range = grid_upper - grid_lower
+            if price_range > 0 and avg_atr > 0:
+                optimal_spacing = avg_atr * config.grid_density_atr_ratio
+                adaptive_count = int(price_range / optimal_spacing)
+                adaptive_count = max(config.grid_density_min, min(config.grid_density_max, adaptive_count))
+                grid_number = adaptive_count
+
     if grid_spacing_mode == "geometric" and grid_lower > 0 and grid_upper > grid_lower:
         grid_ratio = (grid_upper / grid_lower) ** (1 / (grid_number - 1))
         grid_prices = [grid_lower * (grid_ratio ** i) for i in range(grid_number)]
@@ -159,6 +177,34 @@ def grid_trading(
     stop_loss_count = 0
     take_profit_count = 0
     grid_trade_count = 0
+
+    # === v1.1.0: TheorySignal/Kelly/Regime 初始化 ===
+    theory_signals: list[TheorySignal] = []
+    kelly_allocations: list[float] = []
+    kelly_allocation_timestamps: list[str] = []  # v1.1.1: 时间戳追踪
+    regime_engine: Optional[RegimeAwareEngine] = None
+    kelly_strategy_instance: Optional[KellyRebalanceStrategy] = None
+    rebalance_cooldown: int = 0  # 再平衡冷却计数器（防止过度交易）
+    # 最低再平衡交易金额：8×总费率×平均交易额（确保再平衡收益>交易成本）
+    min_rebalance_amount = 8 * (commission_rate + transfer_fee_rate + stamp_duty_rate) * total_investment
+
+    # 凯利准则动态仓位
+    if config.use_kelly_sizing and strategy_mode in ("rebalance_threshold", "rebalance_periodic"):
+        kelly_strategy_instance = KellyRebalanceStrategy(
+            kelly_fraction=config.kelly_fraction,
+            kelly_lookback=config.kelly_lookback,
+            rebalance_threshold=config.rebalance_threshold,
+        )
+        # 初始 target_allocation 由凯利估算（数据不足时用半凯利×0.5=0.25）
+        target_allocation = kelly_strategy_instance.target_allocation
+
+    # 市场状态自适应
+    if config.use_regime_adaptive:
+        regime_engine = RegimeAwareEngine(
+            config=config,
+            grid_prices=grid_prices,
+            lookback=config.regime_lookback,
+        )
 
     # 计算初次买入费用
     first_buy_amount = initial_shares * entry_price
@@ -189,8 +235,46 @@ def grid_trading(
     ]
 
     # 逐个 K 线回测
-    for timestamp, row in data.iterrows():
+    price_series_for_regime: list[float] = []  # 用于 regime 判断的滚动窗口
+
+    for idx, (timestamp, row) in enumerate(data.iterrows()):
         price = float(row["close"])
+        price_series_for_regime.append(price)
+
+        # === v1.1.0: TheorySignal/Kelly/Regime 更新（每20步计算一次，仅当启用时）===
+        if (config.use_kelly_sizing or config.use_regime_adaptive) and idx > 0 and idx % 20 == 0 and len(price_series_for_regime) >= config.regime_lookback:
+            recent_series = pd.Series(price_series_for_regime[-config.regime_lookback:])
+            atr_val = 0.0
+            if atr_series is not None:
+                try:
+                    atr_val = float(atr_series.iloc[idx]) if idx < len(atr_series) else 0.0
+                except (IndexError, TypeError):
+                    atr_val = 0.0
+            price_range = grid_upper - grid_lower
+
+            signal = TheorySignal.from_price_data(
+                price_data=recent_series,
+                trades=trades,
+                config=config,
+                atr_value=atr_val,
+                price_range=price_range,
+            )
+            theory_signals.append(signal)
+
+            # 凯利动态更新 target_allocation
+            if kelly_strategy_instance is not None:
+                kelly_strategy_instance.update_kelly_from_trades(trades)
+                target_allocation = kelly_strategy_instance.target_allocation
+                kelly_allocations.append(target_allocation)
+                kelly_allocation_timestamps.append(str(timestamp))
+
+            # 市场状态自适应更新
+            if regime_engine is not None:
+                regime_engine.update_regime(recent_series)
+
+        # v1.1.1: 冷却期递减
+        if rebalance_cooldown > 0:
+            rebalance_cooldown -= 1
 
         # --- ATR 动态止损止盈检查（优先于网格交易）---
         exit_reason: str = "grid"  # 默认退出原因
@@ -332,7 +416,8 @@ def grid_trading(
         current_stock_ratio = (shares * price) / total_value if total_value > 0 else 0.0
 
         # 再平衡模式：基于阈值偏离触发
-        if strategy_mode == "rebalance_threshold":
+        # v1.1.1: 冷却期 + 成本门槛，防止过度交易
+        if strategy_mode == "rebalance_threshold" and rebalance_cooldown <= 0:
             deviation = abs(current_stock_ratio - target_allocation)
             if deviation > rebalance_threshold:
                 # 需要再平衡
@@ -342,7 +427,7 @@ def grid_trading(
 
                 if diff > 0:  # 需要买入
                     buy_amount = min(diff, cash)  # 不超过可用现金
-                    if buy_amount > 5:  # 至少买 5 元
+                    if buy_amount > max(5, min_rebalance_amount):  # 至少买 5 元
                         buy_shares = int(buy_amount / price)
                         if buy_shares > 0:
                             # position_mode 处理
@@ -386,10 +471,9 @@ def grid_trading(
                                     )
                                 )
                                 grid_trade_count += 1
-
-                elif diff < 0:  # 需要卖出
+                                rebalance_cooldown = 5  # 5步冷却期  # 需要卖出
                     sell_amount = min(-diff, shares * price)  # 不超过持仓市值
-                    if sell_amount > 5:
+                    if sell_amount > max(5, min_rebalance_amount):
                         sell_shares = int(sell_amount / price)
                         sell_shares = min(sell_shares, shares)
                         if sell_shares > 0:
@@ -434,6 +518,7 @@ def grid_trading(
                                 )
                             )
                             grid_trade_count += 1
+                            rebalance_cooldown = 5  # 5步冷却期
 
                 # 再平衡后记录资产值并继续
                 asset_value = cash + shares * price
@@ -559,4 +644,8 @@ def grid_trading(
         stop_loss_count=stop_loss_count,
         take_profit_count=take_profit_count,
         grid_trade_count=grid_trade_count,
+        theory_signals=theory_signals,
+        regime_summary=regime_engine.get_regime_summary() if regime_engine else None,
+        kelly_allocations=kelly_allocations,
+        kelly_allocation_timestamps=kelly_allocation_timestamps,  # v1.1.1
     )

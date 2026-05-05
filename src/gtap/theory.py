@@ -284,8 +284,12 @@ def recommend_grid_params(
 
 
 def get_market_regime(price_data: pd.Series) -> str:
-    """
-    判断市场状态：震荡、趋势、或不确定
+    """判断市场状态：震荡、趋势、或不确定
+
+    v1.1.1: 改进阈值，减少"不确定"的比例
+    - 动态阈值基于数据本身的波动率
+    - 加入趋势方向一致性判断
+    - 多层级判断逻辑
 
     Args:
         price_data: 价格序列
@@ -296,23 +300,50 @@ def get_market_regime(price_data: pd.Series) -> str:
     if len(price_data) < 20:
         return "不确定"
 
-    # 计算短期和长期趋势
-    short_ma = price_data.rolling(5).mean().iloc[-1]
-    long_ma = price_data.rolling(20).mean().iloc[-1]
+    n = len(price_data)
+
+    # 1. 趋势方向
+    long_window = max(20, n // 3)
+    long_ma = price_data.rolling(long_window).mean().iloc[-1]
     current = price_data.iloc[-1]
+    trend_pct = (current - long_ma) / long_ma if long_ma > 0 else 0
 
-    # 计算波动率
+    # 2. 趋势强度：回归斜率
+    try:
+        x = np.arange(n)
+        y = price_data.values
+        slope = np.polyfit(x, y, 1)[0]
+        normalized_slope = slope / price_data.mean() * n
+    except Exception:
+        normalized_slope = 0
+
+    # 3. 波动率
     returns = price_data.pct_change().dropna()
-    volatility = returns.std() * np.sqrt(252)
-
-    # 判断趋势
-    trend_strength = (current - long_ma) / long_ma if long_ma > 0 else 0
-
-    if abs(trend_strength) < 0.05 and volatility > 0.15:
-        return "震荡"
-    elif trend_strength > 0.1:
-        return "上涨"
-    elif trend_strength < -0.1:
-        return "下跌"
-    else:
+    if len(returns) < 5:
         return "不确定"
+    volatility = returns.std()
+
+    # 4. 方向一致性
+    diffs = price_data.diff().dropna()
+    if len(diffs) == 0:
+        return "不确定"
+    up_pct = (diffs > 0).sum() / len(diffs)
+    directionality = max(up_pct, 1 - up_pct)
+
+    # 5. 动态阈值
+    trend_threshold = max(0.02, volatility * 3)
+
+    # 6. 判断逻辑
+    if normalized_slope > trend_threshold and directionality > 0.55:
+        return "上涨"
+    elif normalized_slope < -trend_threshold and directionality > 0.55:
+        return "下跌"
+    elif directionality < 0.55 and abs(normalized_slope) < trend_threshold:
+        return "震荡"
+    elif trend_pct > trend_threshold:
+        return "上涨"
+    elif trend_pct < -trend_threshold:
+        return "下跌"
+    elif abs(trend_pct) < trend_threshold:
+        return "震荡"
+    return "不确定"

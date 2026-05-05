@@ -32,6 +32,9 @@ dependencies = [
     "mplfinance>=0.12.10b0",
 ]
 
+[project.scripts]
+gtap = "gtap.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",

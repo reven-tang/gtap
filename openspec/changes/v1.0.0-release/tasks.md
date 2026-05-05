@@ -18,11 +18,9 @@
 **优先级**: P0
 **预估工时**: 2h
 **验收标准**:
-- [ ] `docs/conf.py` 配置完成（ReadTheDocs 主题 + autodoc 扩展）
-- [ ] `docs/index.rst` 首页包含项目简介、快速开始、API 链接
-- [ ] `requirements.txt` 新增 `gtap[docs]` 组
-- [ ] 本地运行 `sphinx-build -b html docs/ docs/_build` 无错误
-- [ ] ReadTheDocs 配置文件 `.readthedocs.yaml` 已添加
+- [ ] **GWT-01**: Given 开发者已安装依赖，When 运行 `sphinx-build -b html docs/ docs/_build`，Then 命令返回 0 且无警告
+- [ ] **GWT-02**: Given 已配置 `.readthedocs.yaml`，When 推送到 main 分支，Then ReadTheDocs 自动构建成功
+- [ ] **GWT-03**: Given 访问文档站点，When 点击首页链接，Then 可正常跳转到 API 参考和用户指南
 
 **子任务（垂直切片）**:
 1. 创建 `docs/conf.py`（从 sphinx-quickstart 生成 + 定制）
@@ -83,11 +81,9 @@
 **优先级**: P0
 **预估工时**: 1h
 **验收标准**:
-- [ ] `pyproject.toml` 包含完整元数据（name/version/description/author/classifiers）
-- [ ] `README.md` 符合 PyPI 渲染要求（无相对路径图片）
-- [ ] `.pypirc` 模板创建（`scripts/.pypirc.template`）
-- [ ] 本地 `python -m build` 生成 sdist + wheel 成功
-- [ ] `twine check dist/*` 无错误
+- [ ] **GWT-01**: Given 已配置 `pyproject.toml`，When 运行 `python -m build`，Then 成功生成 sdist 和 wheel 文件
+- [ ] **GWT-02**: Given 已生成分发包，When 运行 `twine check dist/*`，Then 返回 "PASSED" 无错误
+- [ ] **GWT-03**: Given 已填写 `.pypirc`，When 运行 `twine upload --repository testpypi`，Then 包成功上传到 TestPyPI
 
 **子任务**:
 1. 完善 `pyproject.toml` project 表（添加 keywords/classifiers/urls）
@@ -105,11 +101,9 @@
 **优先级**: P0
 **预估工时**: 1h
 **验收标准**:
-- [ ] `Dockerfile` 创建（python:3.11-slim 基础镜像）
-- [ ] `docker-compose.yml` 创建（映射端口 8501）
-- [ ] 镜像大小 < 500MB（通过 multi-stage 优化）
-- [ ] 容器启动后 `streamlit run gtap/app.py` 可访问
-- [ ] 健康检查通过（/healthz endpoint）
+- [ ] **GWT-01**: Given 已创建 Dockerfile，When 运行 `docker build -t gtap:1.0.0 .`，Then 镜像大小 < 500MB
+- [ ] **GWT-02**: Given 已创建 docker-compose.yml，When 运行 `docker-compose up -d`，Then 容器状态为 "healthy"
+- [ ] **GWT-03**: Given 容器已运行，When 访问 `http://localhost:8501`，Then Streamlit 界面正常加载
 
 **子任务**:
 1. 编写 Dockerfile（安装依赖 + 复制代码 + 暴露端口）
@@ -215,6 +209,15 @@
 | 测试补充 | `test-driven-development` |
 | Docker 构建 | 通用 DevOps |
 | 发布流程 | `gstack-ship` + `gstack-land-deploy` |
+
+---
+
+## Milestone 分组
+
+**M1 - Documentation** (Sprint 1): Task 1.1~1.3 完成，文档框架 + 用户指南 + 教程就绪
+**M2 - Packaging** (Sprint 2): Task 2.1~2.2 完成，PyPI 配置 + Docker 镜像就绪
+**M3 - Quality** (Sprint 3): Task 3.1~3.2 完成，覆盖率 ≥90% + 文档构建测试通过
+**M4 - Release** (Sprint 4): Task 4.1~4.2 完成，发布脚本 + CHANGELOG 更新，v1.0.0 可发布
 
 ---
 

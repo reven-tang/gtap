@@ -5,6 +5,7 @@ v0.8.0: 香农策略默认配置 + BH对比 + 自适应网格 + P0配置修正
 """
 
 import streamlit as st
+import pandas as pd  # v1.1.1: 可视化需要
 from datetime import date
 from typing import Tuple, Optional
 
@@ -28,7 +29,7 @@ from src.gtap.theory import (
     get_market_regime,
     ShannonInsight,
 )
-import pandas as pd
+from src.gtap.strategies import TheorySignal, KellyRebalanceStrategy, RegimeAwareEngine
 
 
 # ========== Streamlit 页面配置 ==========
@@ -137,6 +138,23 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
             format_func=lambda x: {"geometric": "等比间距（推荐）",
                                    "arithmetic": "等差间距"}.get(x, x))
 
+        # === v1.1.1: 自适应网格密度 ===
+        auto_grid_density = st.checkbox("波动率自适应网格密度", value=False,
+            help="根据ATR动态调整网格数量：高波动→更多网格，低波动→更少")
+        if auto_grid_density:
+            grid_density_atr_ratio = st.slider("密度ATR比例", min_value=0.3, max_value=1.5,
+                value=0.7, step=0.1, format="%.1f",
+                help="网格间距 = ATR × 此比例")
+            col_dmin, col_dmax = st.columns(2)
+            with col_dmin:
+                grid_density_min = st.number_input("最少网格", value=5, min_value=2, step=1)
+            with col_dmax:
+                grid_density_max = st.number_input("最多网格", value=25, min_value=5, step=1)
+        else:
+            grid_density_atr_ratio = 0.7
+            grid_density_min = 5
+            grid_density_max = 25
+
         # 策略模式引导 —— 市场判断推荐
         st.markdown("---")
         st.markdown("**🎯 你的市场判断？**")
@@ -186,9 +204,40 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
                 options=[0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10, 0.12, 0.15, 0.20],
                 value=0.05,
                 format_func=lambda x: f"{x*100:.0f}%")
+
+            # === v1.1.1: 凯利准则动态仓位 ===
+            use_kelly_sizing = st.checkbox("🧮 凯利准则动态仓位", value=False,
+                help="根据胜率/盈亏比动态调整目标仓位，而非固定比例")
+            if use_kelly_sizing:
+                kelly_fraction = st.select_slider("凯利分数",
+                    options=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+                    value=0.5,
+                    format_func=lambda x: f"{x*100:.0f}%",
+                    help="半凯利(50%)更安全，全凯利(100%)理论最优但风险大")
+                kelly_lookback = st.slider("凯利回看期", min_value=10, max_value=60,
+                    value=30, step=5,
+                    help="用多少最近交易来估算胜率和盈亏比")
+                st.info("💡 凯利仓位会随交易历史动态调整，初始保守25%")
+            else:
+                kelly_fraction = 0.5
+                kelly_lookback = 30
         else:
             target_allocation = 0.5
             rebalance_threshold = 0.05
+            use_kelly_sizing = False
+            kelly_fraction = 0.5
+            kelly_lookback = 30
+
+        # === v1.1.1: 市场状态自适应 ===
+        use_regime_adaptive = st.checkbox("🔄 市场状态自适应", value=False,
+            help="自动判断震荡/趋势，切换最优策略")
+        if use_regime_adaptive:
+            regime_lookback = st.slider("状态回看期", min_value=10, max_value=60,
+                value=20, step=5,
+                help="用多少最近K线判断市场状态")
+            st.info("💡 震荡→网格 | 趋势→再平衡 | 不确定→保守")
+        else:
+            regime_lookback = 20
 
         # 仓位模式 —— 默认比例仓位（再平衡更合理）
         position_mode = st.selectbox("仓位模式",
@@ -317,6 +366,16 @@ def sidebar_config() -> Tuple[GridTradingConfig, bool]:
         atr_period=atr_period,
         atr_stop_multiplier=atr_stop_mult,
         atr_tp_multiplier=atr_tp_mult,
+        # v1.1.1 新增参数
+        use_kelly_sizing=use_kelly_sizing,
+        kelly_fraction=kelly_fraction,
+        kelly_lookback=kelly_lookback,
+        use_regime_adaptive=use_regime_adaptive,
+        regime_lookback=regime_lookback,
+        auto_grid_density=auto_grid_density,
+        grid_density_atr_ratio=grid_density_atr_ratio,
+        grid_density_min=grid_density_min,
+        grid_density_max=grid_density_max,
     )
 
     return config, run_button, use_local_store
@@ -475,7 +534,7 @@ def main() -> None:
 
     with st.spinner("正在执行回测..."):
         try:
-            result = grid_trading(data.kline, config, atr_series=atr_series)
+            result = grid_trading(data, config, atr_series=atr_series)
         except GridTradingError as e:
             st.error(f"回测失败: {e}")
             return
@@ -610,6 +669,74 @@ def main() -> None:
             st.info("当前配置可行。可考虑放宽再平衡阈值以减少交易摩擦。")
         else:
             st.warning("当前配置可能受交易摩擦影响较大。建议：1) 减少网格数量 2) 放宽阈值 3) 或选择更低费率券商")
+
+        # === v1.1.1 P2: 凯利仓位变化 & 市场状态 & 成本敏感度 ===
+        if result.kelly_allocations:
+            st.markdown("---")
+            st.subheader("🧮 凯利仓位动态变化")
+            kelly_min = min(result.kelly_allocations)
+            kelly_max = max(result.kelly_allocations)
+            kelly_avg = sum(result.kelly_allocations) / len(result.kelly_allocations)
+            col_k1, col_k2, col_k3 = st.columns(3)
+            col_k1.metric("最低仓位", f"{kelly_min*100:.1f}%")
+            col_k2.metric("平均仓位", f"{kelly_avg*100:.1f}%")
+            col_k3.metric("最高仓位", f"{kelly_max*100:.1f}%")
+            st.caption(f"仓位共调整{len(result.kelly_allocations)}次，初始25%（半凯利安全估计）")
+
+            if result.kelly_allocation_timestamps:
+                kelly_df = pd.DataFrame({
+                    'timestamp': pd.to_datetime(result.kelly_allocation_timestamps),
+                    'kelly_allocation': result.kelly_allocations
+                })
+                st.line_chart(
+                    kelly_df.set_index('timestamp')['kelly_allocation'],
+                    use_container_width=True,
+                    height=200,
+                )
+                st.caption("📈 凯利仓位随时间动态调整")
+            else:
+                st.caption("📈 暂无仓位变化时间序列数据")
+
+        if result.regime_summary:
+            st.markdown("---")
+            st.subheader("🔄 市场状态分布")
+            rs = result.regime_summary
+            col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+            col_r1.metric("震荡", f"{rs.get('震荡', 0)}次")
+            col_r2.metric("上涨", f"{rs.get('上涨', 0)}次")
+            col_r3.metric("下跌", f"{rs.get('下跌', 0)}次")
+            col_r4.metric("不确定", f"{rs.get('不确定', 0)}次")
+            st.caption(f"策略切换{rs.get('switches', 0)}次")
+
+        # === v1.1.1 P2: 成本敏感度曲线 ===
+        st.markdown("---")
+        st.subheader("💰 成本敏感度分析")
+        st.markdown("再平衡阈值与交易成本的权衡关系：")
+
+        import numpy as np
+        thresholds = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10, 0.12, 0.15, 0.20]
+        base_trades = result.total_buy_count + result.total_sell_count
+        base_threshold = config.rebalance_threshold
+        trade_counts = []
+        for t in thresholds:
+            estimated_trades = int(base_trades * (base_threshold / t) if t > 0 else base_trades)
+            trade_counts.append(estimated_trades)
+
+        cost_df = pd.DataFrame({
+            '再平衡阈值': [f"{t*100:.0f}%" for t in thresholds],
+            '交易次数': trade_counts,
+            '总费用': [tc * (config.commission_rate + config.transfer_fee_rate + config.stamp_duty_rate) * 100 for tc in trade_counts]
+        })
+
+        col_cost1, col_cost2 = st.columns(2)
+        with col_cost1:
+            st.line_chart(cost_df.set_index('再平衡阈值')['交易次数'], use_container_width=True, height=180)
+            st.caption("📉 阈值越低 → 交易越频繁")
+        with col_cost2:
+            st.line_chart(cost_df.set_index('再平衡阈值')['总费用'], use_container_width=True, height=180)
+            st.caption("📈 高频交易侵蚀收益")
+
+        st.info(f"💡 **最佳实践**: 阈值建议设置在 3%-5%（当前{config.rebalance_threshold*100:.0f}%），确保单次再平衡收益 > 8×总费率")
 
     except Exception as e:
         st.caption(f"详细解读生成中... ({e})")

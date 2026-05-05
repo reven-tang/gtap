@@ -63,6 +63,21 @@ class GridTradingConfig:
     atr_stop_multiplier: float = 1.5       # 止损乘数 (sl_atr = atr * multiplier)
     atr_tp_multiplier: float = 0.5         # 止盈乘数 (tp_atr = atr * multiplier)
 
+    # 凯利准则动态仓位（v1.1.0 P0）—— 香农恶魔核心：仓位跟随赔率动态调整
+    use_kelly_sizing: bool = False          # 是否启用凯利准则动态调整 target_allocation
+    kelly_fraction: float = 0.5            # 凯利分数（半凯利默认，安全系数）
+    kelly_lookback: int = 30               # 凯利参数回看窗口（交易日）
+
+    # 市场状态自适应策略（v1.1.0 P0）—— 震荡用网格，趋势用再平衡
+    use_regime_adaptive: bool = False      # 是否启用市场状态自适应策略切换
+    regime_lookback: int = 20              # 市场状态判断回看窗口
+
+    # 波动率自适应网格密度（v1.1.0 P1）—— 网格数量跟随波动率自动调整
+    auto_grid_density: bool = False        # 是否启用波动率自适应网格密度
+    grid_density_atr_ratio: float = 0.7    # 每格间距 = ATR × 此比例
+    grid_density_min: int = 5              # 自适应网格数下限
+    grid_density_max: int = 25             # 自适应网格数上限
+
     def __post_init__(self):
         """参数验证"""
         self._validate()
@@ -115,6 +130,24 @@ class GridTradingConfig:
         if self.atr_tp_multiplier < 0:
             raise ConfigError("ATR 止盈乘数必须 ≥ 0")
 
+        # 凯利准则参数验证
+        if self.kelly_fraction <= 0 or self.kelly_fraction > 1:
+            raise ConfigError("凯利分数必须在 0-1 之间（推荐0.5=半凯利）")
+        if self.kelly_lookback < 5:
+            raise ConfigError("凯利回看窗口必须 ≥ 5")
+
+        # 市场状态参数验证
+        if self.regime_lookback < 10:
+            raise ConfigError("市场状态回看窗口必须 ≥ 10")
+
+        # 网格密度参数验证
+        if self.grid_density_atr_ratio <= 0:
+            raise ConfigError("网格密度ATR比例必须 > 0")
+        if self.grid_density_min < 2:
+            raise ConfigError("网格数下限必须 ≥ 2")
+        if self.grid_density_max < self.grid_density_min:
+            raise ConfigError("网格数上限必须 ≥ 下限")
+
         # 策略与模式验证
         if self.strategy_mode not in ("grid", "rebalance_threshold", "rebalance_periodic"):
             raise ConfigError(f"未知策略模式: {self.strategy_mode}")
@@ -160,6 +193,15 @@ class GridTradingConfig:
             "atr_period": self.atr_period,
             "atr_stop_multiplier": self.atr_stop_multiplier,
             "atr_tp_multiplier": self.atr_tp_multiplier,
+            "use_kelly_sizing": self.use_kelly_sizing,
+            "kelly_fraction": self.kelly_fraction,
+            "kelly_lookback": self.kelly_lookback,
+            "use_regime_adaptive": self.use_regime_adaptive,
+            "regime_lookback": self.regime_lookback,
+            "auto_grid_density": self.auto_grid_density,
+            "grid_density_atr_ratio": self.grid_density_atr_ratio,
+            "grid_density_min": self.grid_density_min,
+            "grid_density_max": self.grid_density_max,
         }
 
 

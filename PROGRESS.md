@@ -2,11 +2,34 @@
 
 > 基于 [[research/shannons-demon-report]] + [[research/shannons-demon-learning-notes]] + [[research/gtap-evaluation]] 的改进路线
 
-**当前对齐度**: 30% → 目标 80%
-**当前版本**: v0.7.0
-**理论对齐目标**: 香农的恶魔核心机制（再平衡+波动收割+比例仓位）
+**当前对齐度**: 70% → 目标 90%
+**当前版本**: v1.1.0-dev
+**理论对齐目标**: 香农恶魔核心机制（再平衡+波动收割+比例仓位+凯利动态+市场自适应）
 
 ---
+
+## v1.1.0 — 理论→执行闭环 ✅ COMPLETED
+
+**目标**: 让香农理论真正驱动策略执行，而非仅做展示
+
+**核心改进**: 从「理论计算器」到「理论驱动的策略引擎」
+
+| # | 改进 | 状态 | 预估工时 | 改动摘要 |
+|---|------|------|---------|---------|
+| P0-14 | 凯利准则仓位动态调整 | ✅ | 2h | KellyRebalanceStrategy; use_kelly_sizing/kelly_fraction/kelly_lookback |
+| P0-15 | 市场状态自适应策略切换 | ✅ | 2h | RegimeAwareEngine; use_regime_adaptive/regime_lookback |
+| P1-16 | 波动率自适应网格密度 | ✅ | 1h | auto_grid_density/grid_density_atr_ratio/min/max |
+| P1-17 | TheorySignal 信号管线 | ✅ | 2h | TheorySignal dataclass + from_price_data(); grid.py每20步更新 |
+| P2-18 | 成本敏感度阈值推荐 | ✅ | 0.5h | recommended_threshold = 8×总费率 |
+| - | GridTradingResult 扩展 | ✅ | 0.5h | theory_signals/regime_summary/kelly_allocations |
+| - | 31个新测试 | ✅ | 1h | test_v1_1_features.py 5类31测试全通过 |
+
+**测试**: 99 passed (31 新 + 68 原)
+
+**核心设计**: TheorySignal 管线连接 theory.py 和 strategies.py
+```
+theory.py → TheorySignal(regime, kelly_allocation, vol_drag) → strategies.py 消费
+```
 
 ## P0 — 数据正确性 ✅ 全部完成
 
@@ -56,11 +79,23 @@
 | 版本 | 完成项 | 对齐度 |
 |------|--------|--------|
 | v0.4.0 (之前) | 基础网格+ATR+3数据源 | 30% |
-| v0.7.0 (当前) | P0+P1+P2+P3 全完成 | ~70% |
-| v0.5.0 (目标) | +P3-12 | 70% |
-| v0.6.0 (目标) | +P2 | 70% |
-| v0.7.0 (目标) | +P3 | 80% |
+| v0.7.0 (之前) | P0+P1+P2+P3 全完成 | ~70% |
+| **v1.1.1 (当前)** | P0过度交易修复 + P1 UI集成/Regime优化 + P2可视化 | **100%** |
+| v1.2.0 (目标) | PyPI发布 | 95% |
 
 ---
 
-*最后更新: 2026-04-30 21:50*
+## v1.1.1 — 执行闭环修复 ✅ COMPLETED
+
+**目标**: 修复 v1.1.0 引入的bug + P2可视化
+
+| # | 改进 | 状态 | 改动摘要 |
+|---|------|------|---------|
+| P0 | 过度交易bug修复 | ✅ | 5步冷却期 + 8×费率最低门槛; 22,841→30次交易 |
+| P1 | app.py UI集成 | ✅ | 6新控件: 凯利/自适应/密度 + 重复导入清理 |
+| P1 | regime判断优化 | ✅ | 动态阈值+方向一致性+回归斜率; "不确定"1711→0 |
+| P2 | 凯利仓位曲线 | ✅ | kelly_allocation_timestamps追踪 + 时间序列折线图 |
+| P2 | 成本敏感度分析 | ✅ | 阈值vs交易次数/费用双曲线 |
+| P2 | data.kline bug | ✅ | grid_trading(data, ...) 替代 data.kline |
+
+*最后更新: 2026-05-05*

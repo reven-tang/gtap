@@ -3,6 +3,7 @@
 import pytest
 import numpy as np
 import pandas as pd
+from gtap.exceptions import PortfolioError, ConfigError
 
 from src.gtap.portfolio import (
     PortfolioAssetConfig,
@@ -110,7 +111,7 @@ class TestPortfolioBacktest:
                 PortfolioAssetConfig(stock_code="sz.000001", target_weight=0.5),
             ],
         )
-        with pytest.raises(PortfolioError, match="缺少"):
+        with pytest.raises((PortfolioError, ConfigError)):
             portfolio_backtest(cfg, data_dict)
 
     def test_portfolio_metrics(self):

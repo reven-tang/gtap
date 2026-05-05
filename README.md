@@ -5,9 +5,8 @@
 **基于香农的恶魔理论的网格交易回测平台**
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-176%20passed-green)](tests/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](PROGRESS.md)
+[![Tests](https://img.shields.io/badge/tests-99%20passed-green)](tests/)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue)](PROGRESS.md)
 
 </div>
 
@@ -366,6 +365,25 @@ gtap/
 - *A Random Walk Down Wall Street* by Burton Malkiel — 均值回归与随机游走
 
 ---
+
+## 🛠️ 开发
+
+```bash
+# 安装开发依赖
+pip install -e '.[dev]'
+
+# 运行测试
+pytest
+
+# 代码检查
+ruff check src/gtap/
+mypy src/gtap/
+
+# CLI 使用
+gtap --help
+gtap backtest --stock 000001 --start 2024-01-01 --end 2024-12-31
+gtap info --stock 000001
+```
 
 ## 📄 许可证
 
